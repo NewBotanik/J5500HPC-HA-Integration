@@ -1,0 +1,325 @@
+---
+description: 
+---
+
+# Changelog
+
+## [3.0.0] - 2026-10-02
+### Changed
+-   **Breaking:** the integration is renamed to **JSDSolar J5500HPC/J5500HP**, domain `jsdsolar_j5500hpc_j5500hp` (was `gobel_battery`, "Gobel Battery Monitor"). Home Assistant treats it as a new integration: remove the old entries and `custom_components/gobel_battery`, install the new folder, then add the devices again. Entity IDs and history of the old entries are not carried over.
+
+---------------
+
+## [2.2.0] - 2026-10-01
+### Added
+-   [JSD SOLAR] All query commands: read-back of every §9 setting (37), feature flags `TE?`, time since equalization `TCQN`, inverter clock `DATE`/`TIME`, last fault snapshot `GFAIL` (raw fields, disabled by default), detailed fault bits `GCF`, and in parallel mode the per-unit data `GPDAT`, status bits `GPSTS`, ID `GPID` and PV `GPPV`. They are read 3 per poll cycle in a slow queue; queries the firmware never answers are retried only every 10 rounds.
+-   [JSD SOLAR] Inverter control, off by default and enabled in the integration options (**Configure → Enable inverter control**): `number` and `select` entities for all §9 settings, `switch` entities for the TE/TD feature flags, and buttons for `SON`, `SOFF`, `Q`, `ED1`, `SPON<n>`/`SPOFF<n>` and clock sync (`DATE`/`TIME` from Home Assistant). Every write must be answered with `ACK` and is read back; values are range-checked first (battery-voltage limits follow the detected 12/24/48 V system). `SOFF`, `Q` and `ED1` buttons are disabled in the entity registry by default.
+-   Calibration commands (§10) are not supported on purpose.
+
+---------------
+
+## [2.1.0] - 2026-10-01
+### Added
+-   [JSD SOLAR] Monitoring of JSD SOLAR inverters (e.g. J5500HPC) over RS232, directly or through a serial-to-TCP bridge (`bms_type: JSD_SOLAR`, 2400 baud). The inverter appears as one device with sensors for operating mode, faults, grid, output, inverter stage, DC bus, battery, charger, PV, temperatures, fans, BMS data received by the inverter, energy counters, identity and setting read-backs, plus binary sensors for every warning bit. Read-only: no setting, control or calibration commands are sent.
+-   [JSD SOLAR] Settings are read one per poll cycle, the last good frame of a command is kept for 3 failed cycles, and commands the firmware does not answer are retried only every 30 cycles, so a full cycle fits the slow 2400 baud link.
+-   Offline driver test: `python tests/test_jsdsolar.py`.
+
+---------------
+
+## [2.0.12] - 2026-07-25
+### Fixed
+-   [JKBMS] Fixed setup frame voltage register parsing for `VolInverterMaxCharge` (Inverter Max Charge Voltage) at offset 38 and `VolFloatCharge` (Float Charge Voltage) at offset 42 (previously misidentified as battery undervoltage/overvoltage protection).
+
+---------------
+
+## [2.0.11] - 2026-07-13
+### Fixed
+-   [Pace BMS] Fixed false-positive structural matches in dynamic U/W byte calculation (e.g. when battery is fully charged and current is 0A) by checking for non-zero cell and temperature counts and utilizing a hybrid division calculation with fallback.
+
+---------------
+
+## [2.0.10] - 2026-06-24
+### Fixed
+-   [BMS] Fixed socket buffer truncation and telemetry protocol desynchronization over Ethernet/WiFi connections by implementing TCP stream buffering and reading until carriage return delimiter.
+
+---------------
+
+## [2.0.9] - 2026-06-22
+### Fixed
+-   [Integration] Fixed an issue where the integration would not automatically reconnect after a serial or network disconnection.
+-   [JKBMS] Added a watchdog timer to force a connection reset if no valid telemetry frames are received for 15 seconds.
+-   [PACE/TDT] Enhanced underlying communication handler to immediately discard dead connections upon read exceptions and reconnect on the next polling cycle.
+
+---------------
+
+## [2.0.8] - 2026-06-22
+### Fixed
+- Fixed `AttributeError: 'BMSCommunication' object has no attribute 'close'` during integration unload.
+
+
+
+## 2.0.7
+
+-   [Integration] Implement robust read retry mechanism and data caching for battery packs to smooth out intermittent RS485/Serial communication timeouts or CRC errors.
+-   [Integration] Fix entities dropping to `unknown` state by ensuring they correctly transition to the standard `unavailable` state if communication with a battery pack completely drops or exceeds the retry limit.
+
+---------------
+
+
+## 2.0.6
+
+-   [PACE/TDT] Fix active balancing status parsing incorrectly reporting values due to shifted byte offsets in RS232 and RS485 protocols.
+
+---------------
+
+
+## 2.0.1
+
+-   [JKBMS] Fix multi-pack discovery and entity registration.
+-   [JKBMS] Implement dynamic entity registration and unique physical `pack_id` mapping to prevent pack swapping and register newly online packs on the fly.
+-   [JKBMS] Optimize startup passive listening wait window to ensure all parallel packs check in before completing the initial poll.
+
+---------------
+
+
+## 2.0.0
+
+-   Migrate Home Assistant Add-on to native custom integration.
+
+---------------
+
+
+## 1.9.79
+
+-   [JKBMS] Add support for publishing average cell voltage (`cell_voltage_avg`), maximum voltage cell index (`cell_voltage_max_index`), and minimum voltage cell index (`cell_voltage_min_index`) to Home Assistant via MQTT.
+-   [JKBMS] Convert raw 0-based cell index telemetry values from the JK protocol to 1-based index sensors to align with standard cell naming.
+
+---------------
+
+
+## 1.9.78
+
+-   [JKBMS] Fix 'Serial' object has no attribute 'gettimeout' AttributeError when connecting the BMS over a serial port in passive listening mode.
+
+---------------
+
+
+## 1.9.77
+
+-   [PACE232] Implement robust structural validation for packet type classification. Distinguishes analog and warning packets by validating their schema structure for the reported number of parallel packs, automatically adapting to varying firmware data lengths (user-defined fields size U and warning status bytes W). This resolves protocol desync, cell voltage, temperature, and SOC telemetry corruption in multi-pack configurations.
+-   [PACE/TDT] Fix IndexError parsing crashes on firmware versions without active balancing support by implementing safe boundary checks.
+-   [PACE/TDT] Correct active balancing status byte offsets across PACE RS232, RS485, and TDT RS232 protocols.
+-   [Dashboard] Add active and passive balancing status sensors to the PACE/TDT BMS pack details grid layout in the HA dashboard. Correct entity case mismatch (from uppercase SOC/SOH to lowercase soc/soh) to align with Home Assistant's automatically registered lowercase MQTT entity IDs.
+
+---------------
+
+
+## 1.9.74
+
+-   [PACE/TDT] Separate Passive and Active Balancing Status into distinct sensors:
+    *   **Passive Balancing Status**:
+        *   Keys: `balancing_status_passive_1`, `balancing_status_passive_2`
+        *   HA discovery name: `Pack 0x Balancing Status Passive 1 / 2`
+        *   Value: Raw bitmask bypass-resistor active byte values (multiple bits can be 1).
+    *   **Active Balancing Status**:
+        *   Keys: `balancing_status_active_1`, `balancing_status_active_2`
+        *   HA discovery name: `Pack 0x Balancing Status Active 1 / 2`
+        *   Value: Decoded cell index (1-8, 9-16). Returns 0 when active balancing is inactive.
+-   [TDT] Fix ValueError crash when balance state values are greater than 1.
+
+---------------
+
+
+## 1.9.73
+
+-   [PACE/TDT] Add raw ASCII and Hexadecimal packet logging for all telemetry send and receive operations when `debug` configuration is enabled.
+-   [PACE/TDT] Fix method signatures for capacity and product info methods.
+
+---------------
+
+
+## 1.9.72
+
+-   [PACE/TDT] Expose active balancing status (`balance_state_1` and `balance_state_2`) sensors for PACE (RS232, RS485, WiFi) and TDT BMS protocols.
+-   [BMS] Standardize debug logging format for parsed analog and warning telemetry across JK, PACE, and TDT BMS drivers.
+
+---------------
+
+
+## 1.9.71
+
+-   [PACE485] Fix cell temperature sensors unit (from '℃' to standard '°C') so Home Assistant accepts the sensors.
+
+---------------
+
+
+## 1.9.70
+
+-   [PACE232] Dynamically determine user-defined fields and warning status bytes parsing lengths to support differing battery pack firmware versions.
+-   [PACE232] Implement a ratiometric packet classification method to differentiate Analog and Warning response packets. Delayed/out-of-order packets are salvaged, parsed, and cached to prevent Home Assistant sensor state corruption.
+
+---------------
+
+
+## 1.9.66
+
+-   [Addon] Add multilingual translation support (English, Germany and Chinese) for configuration options to display user-friendly names and descriptions in the Home Assistant Add-on settings page.
+
+---------------
+
+
+## 1.9.61
+
+-   [JKBMS] Add `jk_display_index_start` configuration setting with choices "00" or "01" (default) to allow matching the Home Assistant entity and pack labels with the physical dial-up address of the battery pack.
+
+---------------
+
+
+## 1.9.60
+
+-   [JKBMS] Refactor JK BMS serial reader into an asynchronous background listener thread to completely prevent serial port blocking in the main loop. Non-55AA frames (like Modbus master queries) are automatically filtered and discarded. Main publishing logic fetches telemetry from thread-safe caches with 0.0s latency, resolving HA entity and pack count fluctuations.
+
+---------------
+
+
+## 1.9.59
+
+-   [JKBMS] Make dynamic telemetry cache expiration adaptive based on the refresh interval (`max(30s, refresh_interval * 3)`) to support larger refresh interval settings (e.g. 20s) without false-offline reports.
+
+---------------
+
+
+## 1.9.58
+
+-   [JKBMS] Optimize passive read loop by increasing reading timeout to 8.0s (fully covering the observed 7.0s cycle time for 16 packs) and adding a 5-second freshness cache bypass to prevent double reading from blocking the serial port.
+
+---------------
+
+
+## 1.9.57
+
+-   [JKBMS] Further increase passive reading timeout window from 2.0s to 4.0s to guarantee a full 3.2-second sequential polling cycle of 16 packs is captured.
+
+---------------
+
+
+## 1.9.56
+
+-   [JKBMS] Increase passive reading timeout window from 1.0s to 2.0s to reliably capture telemetry frames from up to 16 parallel battery packs.
+
+---------------
+
+
+## 1.9.55
+
+-   [JKBMS] Cache dynamic telemetry frames for up to 30 seconds to prevent pack count (total_packs_num) and battery entities from fluctuating due to temporary packet drops or serial read timeouts.
+
+---------------
+
+
+## 1.9.54
+
+-   [JKBMS] Map Modbus Slave ID directly as pack ID to support 0-based communication address configurations (addresses 0, 1, 2, 3...) and resolve pack mapping conflicts in Home Assistant.
+
+---------------
+
+
+## 1.9.53
+
+-   [JKBMS] Map 1-based Modbus Slave ID in trailing ACK to 0-based pack ID to fix missing Pack 01 and prevent duplicate/misaligned pack devices in HA.
+
+---------------
+
+
+## 1.9.52
+
+-   [PACEWIFI] Add support for PACE_LV_WIFI bms_type to passively parse telemetry data actively broadcasted over WiFi.
+
+---------------
+
+
+## 1.9.50
+
+-   [JKBMS] Dynamically parse Modbus ACK at the end of frames, making data parsing independent of specific packet lengths.
+
+---------------
+
+
+## 1.9.48
+
+-   [JKBMS] Fixed pack identification logic to prevent data collision between different packs.
+-   [JKBMS] Send each pack's sensor data to its own separate Home Assistant device.
+
+---------------
+
+
+## 1.9.46
+
+-   [JKBMS] Changed verbose frame-parsing log messages from WARNING to DEBUG to reduce log noise.
+
+---------------
+
+
+## 1.9.45
+
+-   [JKBMS] Refined multi-pack integration and setup configuration parameters (Reg=0x161E).
+-   [PACE232] Added heating film status (status_heating) to instruction_state.
+
+---------------
+
+## 1.9.21
+
+-   Add build.yaml to fix Docker build failure (missing BUILD_FROM arg).
+
+
+---------------
+
+## 1.9.20
+
+-   Add JK BMS RS485 support.
+-   Fix Energy Discharged/Charged bug.
+
+
+---------------
+
+## 1.9.0
+
+-   Auto reconnection after connection lost.
+-   Add index of max/min cell voltage.
+-   Modify Protoss PW10 / Waveshare manual, change 'Flow Control Settings' to 'Flow Control', 'Software Flow Control' to 'OFF'.
+
+
+---------------
+
+## 1.8.2
+
+-   Fix temperature unit error.
+-   Fix max/min voltage unit error.
+-   Add voltage difference value.
+-   Change data reading timeout to 3 seconds.
+
+---------------
+
+
+## 1.8.0
+
+-   Value precision of energy charged/discharged is changed to 5.
+
+---------------
+
+
+## 1.7.8
+
+-   TDT BMS bug fix.
+
+---------------
+
+
+## 1.7
+
+-   fix RS232 multiple packs bug.
+    for Pace BMS, use PACE_LV (latest version protocol) by default, if it does not work, try PACE_LV_V1.
+-   add max/min cell voltage for whole system and each pack.
+-   add TDT BMS support.
+
+---------------

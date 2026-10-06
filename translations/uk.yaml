@@ -1,0 +1,61 @@
+configuration:
+  host_name:
+    name: "Ім'я хоста"
+    description: "Ім'я хоста екземпляра Home Assistant."
+  mqtt_broker:
+    name: "MQTT-брокер"
+    description: "Ім'я хоста або IP-адреса вашого MQTT-брокера."
+  mqtt_port:
+    name: "Порт MQTT"
+    description: "Порт вашого MQTT-брокера."
+  mqtt_username:
+    name: "Ім'я користувача MQTT"
+    description: "Ім'я користувача для автентифікації на MQTT-брокері."
+  mqtt_password:
+    name: "Пароль MQTT"
+    description: "Пароль для автентифікації на MQTT-брокері."
+  device_name:
+    name: "Назва пристрою"
+    description: "Власна назва пристрою моніторингу батареї в Home Assistant."
+  battery_manufacturer:
+    name: "Виробник батареї"
+    description: "Виробник вашої батареї (наприклад, Gobel Power)."
+  battery_model:
+    name: "Модель батареї"
+    description: "Модель вашої батареї."
+  max_parallel_allowed:
+    name: "Макс. паралельних паків"
+    description: "Максимально допустима кількість паралельно підключених батарейних паків."
+  connection_type:
+    name: "Тип підключення"
+    description: "Спосіб підключення до BMS (serial, ethernet або wifi)."
+  battery_port:
+    name: "Тип порту батареї"
+    description: "Фізичний порт для підключення (rs232 або rs485)."
+  bms_type:
+    name: "Тип BMS"
+    description: "Тип/бренд BMS (PACE_LV, JK_PB, TDT або PACE_LV_WIFI)."
+  bms_ip_address:
+    name: "IP-адреса BMS"
+    description: "IP-адреса BMS (для підключення через Ethernet/WiFi)."
+  bms_ip_port:
+    name: "IP-порт BMS"
+    description: "TCP-порт BMS (для підключення через Ethernet/WiFi)."
+  bms_usb_port:
+    name: "USB/послідовний порт BMS"
+    description: "Шлях до послідовного порту (для підключення через Serial, наприклад /dev/ttyUSB0)."
+  bms_baud_rate:
+    name: "Швидкість обміну BMS (baud)"
+    description: "Швидкість послідовного обміну з BMS. Для JKBMS або Gobel PC BMS встановіть 115200. Інші BMS зазвичай працюють на 9600 або 115200."
+  data_refresh_interval:
+    name: "Інтервал оновлення даних"
+    description: "Інтервал у секундах між оновленнями телеметрії."
+  debug:
+    name: "Увімкнути журнали налагодження"
+    description: "Встановіть 1, щоб увімкнути докладні журнали налагодження, або 0 для звичайних журналів."
+  if_random:
+    name: "Випадкові тестові дані"
+    description: "Встановіть 1, щоб генерувати випадкові тестові дані (для налагодження розробником)."
+  jk_display_index_start:
+    name: "Початковий індекс паків JKBMS"
+    description: "Оберіть, чи відповідає мітка пака JKBMS фізичній адресі DIP-перемикача ('00' — нумерація з pack_00), чи зсувається так, щоб починатися з pack_01 ('01'). ⚠️ УВАГА: зміна цього параметра змінює формат ID MQTT-entities, через що наявні entities у Home Assistant стануть недоступними і з'являться дублікати. Якщо змінити все ж потрібно, спершу видаліть цей пристрій з MQTT-інтеграції Home Assistant, а потім перезапустіть Add-on, щоб перебудувати entities. Не змінюйте без потреби."

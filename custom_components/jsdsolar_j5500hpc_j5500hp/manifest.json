@@ -1,0 +1,15 @@
+{
+  "domain": "jsdsolar_j5500hpc_j5500hp",
+  "name": "JSDSolar J5500HPC/J5500HP",
+  "codeowners": [
+    "@fancyui"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/fancyui/Gobel-Battery-HA-Integration",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/fancyui/Gobel-Battery-HA-Integration/issues",
+  "requirements": [
+    "pyserial>=3.5"
+  ],
+  "version": "3.0.0"
+}
