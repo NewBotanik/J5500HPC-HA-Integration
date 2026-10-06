@@ -49,7 +49,7 @@
 1. Переконайтеся, що [HACS (Home Assistant Community Store)](https://hacs.xyz/) встановлено.
 2. У Home Assistant перейдіть до **HACS -> Інтеграції**.
 3. Натисніть три крапки у верхньому правому куті та оберіть **Користувацькі репозиторії** (Custom repositories).
-4. Вставте URL цього репозиторію: `https://github.com/fancyui/Gobel-Battery-HA-Integration`
+4. Вставте URL цього репозиторію: `https://github.com/NewBotanik/J5500HPC-HA-Integration`
 5. Оберіть категорію **Integration** і натисніть **Додати**.
 6. Знайдіть у HACS інтеграцію **JSDSolar J5500HPC/J5500HP** і натисніть **Завантажити**.
 7. Перезапустіть Home Assistant.
