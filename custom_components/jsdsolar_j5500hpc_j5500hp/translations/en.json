@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Device type and connection",
+        "data": {
+          "device_name": "Device name",
+          "bms_type": "Device type (JSD_SOLAR = J5500HPC/J5500HP inverter)",
+          "connection_type": "Connection",
+          "battery_port": "Port type",
+          "poll_interval": "Poll interval, s (inverter: 10 or more)",
+          "max_parallel_allowed": "Max parallel packs (BMS only)",
+          "jk_display_index_start": "JK BMS pack numbering start (JK only)"
+        }
+      },
+      "network": {
+        "title": "Network connection",
+        "data": {
+          "ip_address": "IP address of the bridge",
+          "ip_port": "TCP port"
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "data": {
+          "usb_port": "Serial port",
+          "baud_rate": "Baud rate (inverter: 2400)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Inverter control",
+        "description": "When enabled, inverter settings become editable (number/select), feature flags become switches, and control buttons are added. Every change is checked, must be confirmed by the inverter and is read back. The Power Off, Reset Energy Counters and Factory Reset buttons start disabled in the entity settings.",
+        "data": {
+          "jsd_enable_control": "Enable inverter control (change settings)"
+        }
+      }
+    },
+    "abort": {
+      "no_options": "This device type has no options."
+    }
+  }
+}

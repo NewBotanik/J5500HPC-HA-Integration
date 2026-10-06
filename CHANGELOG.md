@@ -4,6 +4,14 @@ description:
 
 # Changelog
 
+## [3.0.1] - 2026-10-06
+### Added
+-   Translations (English, Ukrainian) for the setup and options forms. The **Configure** form now explains the **Enable inverter control** option, which turns the read-only inverter settings into editable entities.
+### Fixed
+-   [JSD SOLAR] `GFAIL` with fault code 0 no longer exposes the meaningless snapshot fields (e.g. "Last Fault Mode: Unknown (35)").
+
+---------------
+
 ## [3.0.0] - 2026-10-02
 ### Changed
 -   **Breaking:** the integration is renamed to **JSDSolar J5500HPC/J5500HP**, domain `jsdsolar_j5500hpc_j5500hp` (was `gobel_battery`, "Gobel Battery Monitor"). Home Assistant treats it as a new integration: remove the old entries and `custom_components/gobel_battery`, install the new folder, then add the devices again. Entity IDs and history of the old entries are not carried over.

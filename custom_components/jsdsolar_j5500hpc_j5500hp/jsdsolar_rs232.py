@@ -838,8 +838,11 @@ def parse_gfail(response):
     data = {
         'last_fault_code': code,
         'last_fault': FAULT_CODES.get(code, f"Unknown fault ({code})"),
-        'last_fault_mode': _enum(GFAIL_MODES, _num(t, 1, int)),
     }
+    if code == 0:
+        # No fault recorded: the snapshot fields hold no meaningful values
+        return data
+    data['last_fault_mode'] = _enum(GFAIL_MODES, _num(t, 1, int))
     for offset, key in enumerate(GFAIL_RAW_FIELDS, start=2):
         data[key] = _num(t, offset, float if key == 'last_fault_field_7_raw' else int)
     return data
@@ -1124,6 +1127,16 @@ class JSDSOLAR232:
         self.slow_flags.update(flags)
         return True
 
+    def _read_gfail(self):
+        parsed = parse_gfail(self.query('GFAIL'))
+        if not parsed:
+            return False
+        # Drop the previous snapshot: with fault code 0 its fields are not sent again
+        for key in ('last_fault_mode',) + GFAIL_RAW_FIELDS:
+            self.slow_data.pop(key, None)
+        self.slow_data.update({k: v for k, v in parsed.items() if v is not None})
+        return True
+
     def _read_parallel_unit(self, unit):
         found = self._read_into_slow_data(f"GPDAT{unit}", lambda r: parse_gpdat(unit, r))
         if self.slow_flags.get(f"parallel_{unit}_communication_ok"):
@@ -1141,7 +1154,7 @@ class JSDSOLAR232:
             ('TCQN????', lambda: self._read_into_slow_data('TCQN????', parse_tcqn)),
             ('DATE??????', lambda: self._read_into_slow_data('DATE??????', parse_date)),
             ('TIME??????', lambda: self._read_into_slow_data('TIME??????', parse_time)),
-            ('GFAIL', lambda: self._read_into_slow_data('GFAIL', parse_gfail)),
+            ('GFAIL', self._read_gfail),
             ('GCF', lambda: self._read_into_slow_data('GCF', parse_gcf)),
         ]
         if self._parallel_mode():

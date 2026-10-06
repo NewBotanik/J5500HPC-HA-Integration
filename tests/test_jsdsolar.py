@@ -112,6 +112,8 @@ results.append(check("TE? disabled letter", features['feature_buzzer_mute'], Fal
 results.append(check("TE? unknown format", jsd.parse_features("(0123"), None))
 gfail = jsd.parse_gfail(jsd.SAMPLE_RESPONSES['GFAIL'])
 results.append(check("GFAIL fault and mode", (gfail['last_fault'], gfail['last_fault_mode']), ('Overload fault', 'Battery')))
+results.append(check("GFAIL without fault hides snapshot", jsd.parse_gfail("(00 35 00000 0000"),
+                     {'last_fault_code': 0, 'last_fault': 'No fault'}))
 results.append(check("GCF P1 has 17 bits", len(jsd.parse_gcf(jsd.SAMPLE_RESPONSES['GCF'])['fault_bits_pfc']), 17))
 gpdat = jsd.parse_gpdat(2, "(1 5 4001 1 00 230.0 50.00 229.0 50.00 230.0 50.00 007.5 052.0 -10.0 040 "
                            "01800 01600 080 300.0 010.0 3000 041.0")
