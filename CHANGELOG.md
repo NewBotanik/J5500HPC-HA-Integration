@@ -4,6 +4,12 @@ description:
 
 # Changelog
 
+## [3.2.0] - 2026-10-07
+### Added
+-   Connection parameters in the options form (**Configure**): serial port and baud rate for a serial connection, bridge IP address and TCP port for a network connection. They can be changed without re-adding the device.
+
+---------------
+
 ## [3.1.0] - 2026-10-07
 ### Added
 -   Options form (**Configure**) for every device type: **poll interval** (changes without re-adding the device), **Enable debug logging** and **Logging depth**. Inverter control stays in the same form for JSD SOLAR.

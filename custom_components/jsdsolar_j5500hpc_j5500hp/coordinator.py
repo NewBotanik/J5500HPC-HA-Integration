@@ -72,10 +72,11 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
         self.bms_type = entry.data.get(CONF_BMS_TYPE)
         self.connection_type = entry.data.get(CONF_CONNECTION_TYPE)
         self.battery_port = entry.data.get(CONF_BATTERY_PORT)
-        self.ip_address = entry.data.get(CONF_IP_ADDRESS)
-        self.ip_port = entry.data.get(CONF_IP_PORT)
-        self.usb_port = entry.data.get(CONF_USB_PORT)
-        self.baud_rate = entry.data.get(CONF_BAUD_RATE)
+        # Connection parameters changed under Configure override the ones from setup
+        self.ip_address = entry.options.get(CONF_IP_ADDRESS, entry.data.get(CONF_IP_ADDRESS))
+        self.ip_port = int(entry.options.get(CONF_IP_PORT, entry.data.get(CONF_IP_PORT)) or 0) or None
+        self.usb_port = entry.options.get(CONF_USB_PORT, entry.data.get(CONF_USB_PORT))
+        self.baud_rate = int(entry.options.get(CONF_BAUD_RATE, entry.data.get(CONF_BAUD_RATE)) or 0) or None
         self.max_parallel = entry.data.get(CONF_MAX_PARALLEL, 16)
         self.jk_display_index_start = entry.data.get(CONF_JK_DISPLAY_INDEX_START, "01")
         self.jsd_control = entry.options.get(CONF_JSD_ENABLE_CONTROL, False)

@@ -38,6 +38,10 @@
         "title": "Integration options",
         "description": "Poll interval and debug logging apply to every device type. Inverter control (JSD SOLAR only) turns the settings into editable entities and adds control buttons; every change is checked, must be confirmed by the inverter and is read back. The Power Off, Reset Energy Counters and Factory Reset buttons start disabled in the entity settings.",
         "data": {
+          "usb_port": "Serial port",
+          "baud_rate": "Baud rate (inverter: 2400)",
+          "ip_address": "IP address of the bridge",
+          "ip_port": "TCP port",
           "poll_interval": "Poll interval (inverter: 10 s or more)",
           "debug_logging": "Enable debug logging",
           "log_depth": "Logging depth",

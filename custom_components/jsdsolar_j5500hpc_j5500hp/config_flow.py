@@ -33,6 +33,7 @@ from .const import (
     DEFAULT_BAUD_RATE,
     DEFAULT_JSD_SOLAR_BAUD_RATE,
     DEFAULT_IP_PORT,
+    CONN_TYPE_SERIAL,
     DEFAULT_JK_DISPLAY_INDEX_START,
 )
 
@@ -134,8 +135,26 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         options = self._entry.options
-        poll_interval = options.get(CONF_POLL_INTERVAL, self._entry.data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
-        fields = {
+        data = self._entry.data
+
+        def current(key, default=None):
+            return options.get(key, data.get(key, default))
+
+        poll_interval = current(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+        fields = {}
+        # Connection of this entry: serial port and baud rate, or bridge IP and TCP port
+        if data.get(CONF_CONNECTION_TYPE) == CONN_TYPE_SERIAL:
+            default_baud = DEFAULT_JSD_SOLAR_BAUD_RATE if data.get(CONF_BMS_TYPE) == BMS_TYPE_JSD_SOLAR else DEFAULT_BAUD_RATE
+            fields[vol.Required(CONF_USB_PORT, default=current(CONF_USB_PORT, "/dev/ttyUSB0"))] = str
+            fields[vol.Required(CONF_BAUD_RATE, default=current(CONF_BAUD_RATE, default_baud))] = selector.NumberSelector(
+                selector.NumberSelectorConfig(min=300, max=921600, step=1, mode=selector.NumberSelectorMode.BOX)
+            )
+        else:
+            fields[vol.Required(CONF_IP_ADDRESS, default=current(CONF_IP_ADDRESS, ""))] = str
+            fields[vol.Required(CONF_IP_PORT, default=current(CONF_IP_PORT, DEFAULT_IP_PORT))] = selector.NumberSelector(
+                selector.NumberSelectorConfig(min=1, max=65535, step=1, mode=selector.NumberSelectorMode.BOX)
+            )
+        fields.update({
             vol.Required(CONF_POLL_INTERVAL, default=poll_interval): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=1, max=3600, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="s"
@@ -147,7 +166,7 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
                     options=LOG_DEPTHS, translation_key="log_depth", mode=selector.SelectSelectorMode.DROPDOWN
                 )
             ),
-        }
+        })
         if self._entry.data.get(CONF_BMS_TYPE) == BMS_TYPE_JSD_SOLAR:
             fields[vol.Required(
                 CONF_JSD_ENABLE_CONTROL, default=options.get(CONF_JSD_ENABLE_CONTROL, False)
