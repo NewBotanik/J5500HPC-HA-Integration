@@ -4,6 +4,12 @@ description:
 
 # Changelog
 
+## [3.2.1] - 2026-10-07
+### Changed
+-   New integration icons in the Home Assistant brand sizes (`icon.png` 256×256, `icon@2x.png` 512×512) and a new `logo.png`, in `brand/` and in the repository root.
+
+---------------
+
 ## [3.2.0] - 2026-10-07
 ### Added
 -   Connection parameters in the options form (**Configure**): serial port and baud rate for a serial connection, bridge IP address and TCP port for a network connection. They can be changed without re-adding the device.
