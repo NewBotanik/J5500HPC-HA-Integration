@@ -6,7 +6,8 @@ description:
 
 ## [3.2.1] - 2026-10-07
 ### Changed
--   New integration icons in the Home Assistant brand sizes (`icon.png` 256×256, `icon@2x.png` 512×512) and a new `logo.png`, in `brand/` and in the repository root.
+-   New integration icons in the Home Assistant brand sizes (`icon.png` 256×256, `icon@2x.png` 512×512), regenerated from the full-resolution `J5500HPC.png` with a sharper downscale so the "jsdsolar" lettering stays readable.
+-   New `logo.png` (347×512) and `logo@2x.png` (695×1024), in `brand/` and in the repository root.
 
 ---------------
 
