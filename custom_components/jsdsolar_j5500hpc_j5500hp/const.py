@@ -14,6 +14,14 @@ CONF_JK_DISPLAY_INDEX_START = "jk_display_index_start"
 CONF_MAX_PARALLEL = "max_parallel_allowed"
 # Options flow: allow JSD SOLAR settings/control writes (off by default)
 CONF_JSD_ENABLE_CONTROL = "jsd_enable_control"
+# Options flow: debug logging of this entry and how deep it goes
+CONF_DEBUG_LOGGING = "debug_logging"
+CONF_LOG_DEPTH = "log_depth"
+LOG_DEPTH_BASIC = "basic"
+LOG_DEPTH_PROTOCOL = "protocol"
+LOG_DEPTH_PARSING = "parsing"
+LOG_DEPTHS = [LOG_DEPTH_BASIC, LOG_DEPTH_PROTOCOL, LOG_DEPTH_PARSING]
+DEFAULT_LOG_DEPTH = LOG_DEPTH_PROTOCOL
 
 # Option Choices
 BMS_TYPE_PACE_LV = "PACE_LV"

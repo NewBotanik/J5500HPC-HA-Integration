@@ -2,6 +2,7 @@ import logging
 import random
 import re
 import threading
+import time
 
 # JSD SOLAR inverter (e.g. J5500HPC) over RS232: ASCII command/response, 2400 8N1, CR-terminated.
 # Protocol reference: docs/protocols/protocol.JSDSOLAR.en.md. Polling sends queries only; settings and control commands
@@ -987,6 +988,13 @@ def is_problem_flag(key):
     return key.startswith(PROBLEM_FLAGS_PREFIXES) or key in PROBLEM_FLAGS or any(m in key for m in PROBLEM_FLAG_MARKERS)
 
 
+# Debug log depth (options flow): what the driver writes to the HA log
+LOG_OFF = 0
+LOG_BASIC = 1      # cycle summary, identity, writes
+LOG_PROTOCOL = 2   # + every frame sent and received, with response time
+LOG_PARSING = 3    # + parsed values of every command
+
+
 class JSDSOLAR232:
     """JSD SOLAR inverter driver for the HA coordinator.
 
@@ -1004,8 +1012,10 @@ class JSDSOLAR232:
     # A slow query that keeps failing is retried only once per this many rounds of the slow queue
     SLOW_BACKOFF_ROUNDS = 10
 
-    def __init__(self, bms_comm, data_refresh_interval, debug=0, if_random=0, allow_writes=False):
+    def __init__(self, bms_comm, data_refresh_interval, debug=0, if_random=0, allow_writes=False,
+                 log_depth=LOG_OFF):
         self.bms_comm = bms_comm
+        self.log_depth = log_depth
         self.data_refresh_interval = data_refresh_interval
         self.if_random = if_random
         self.allow_writes = allow_writes
@@ -1030,13 +1040,26 @@ class JSDSOLAR232:
     def _exchange(self, command):
         """Send one command, return the raw reply line ('' or None when silent)."""
         with self._lock:
+            started = time.monotonic()
+            if self.log_depth >= LOG_PROTOCOL:
+                self.logger.debug("TX %r", f"{command}\r")
             if self.if_random:
-                return self._sample_response(command)
-            # Drop stale bytes, e.g. the second CR that SVFW may send (§14 #14)
-            self.bms_comm.flush()
-            if not self.bms_comm.send_data(f"{command}\r"):
-                return None
-            return self.bms_comm.receive_data()
+                response = self._sample_response(command)
+            else:
+                # Drop stale bytes, e.g. the second CR that SVFW may send (§14 #14)
+                self.bms_comm.flush()
+                if not self.bms_comm.send_data(f"{command}\r"):
+                    if self.log_depth >= LOG_PROTOCOL:
+                        self.logger.debug("TX %s failed: link down", command)
+                    return None
+                response = self.bms_comm.receive_data()
+            if self.log_depth >= LOG_PROTOCOL:
+                elapsed_ms = (time.monotonic() - started) * 1000
+                if response:
+                    self.logger.debug("RX %r (%.0f ms)", response, elapsed_ms)
+                else:
+                    self.logger.debug("RX nothing for %s (%.0f ms)", command, elapsed_ms)
+            return response
 
     def query(self, command):
         """Send one query and return the response line, or None on timeout/NAK."""
@@ -1049,6 +1072,16 @@ class JSDSOLAR232:
             return None
         self.logger.debug("%s: %s", command, response)
         return response
+
+    def _parse(self, command, parser, response):
+        """Run a parser on a reply; at LOG_PARSING depth log what came out."""
+        parsed = parser(response)
+        if self.log_depth >= LOG_PARSING:
+            if parsed:
+                self.logger.debug("Parsed %s: %s", command, parsed)
+            elif response:
+                self.logger.debug("Parsed %s: nothing usable in %r", command, response)
+        return parsed
 
     def _sample_response(self, command):
         response = SAMPLE_RESPONSES.get(command)
@@ -1068,7 +1101,7 @@ class JSDSOLAR232:
         """Parsed result of one command, or the cached one while failures are few."""
         if not self._due(command):
             return None
-        parsed = parser(self.query(command))
+        parsed = self._parse(command, parser, self.query(command))
         if parsed:
             self._failures[command] = 0
             self._last[command] = parsed
@@ -1085,7 +1118,7 @@ class JSDSOLAR232:
     def update_identity(self):
         """Serial number, firmware and rated data; retried until the inverter answers."""
         for command, parser in IDENTITY_QUERIES:
-            parsed = parser(self.query(command))
+            parsed = self._parse(command, parser, self.query(command))
             if parsed:
                 self.identity.update(parsed)
                 if command == 'F':
@@ -1103,23 +1136,24 @@ class JSDSOLAR232:
 
     def _read_setting(self, key):
         if key == 'setting_frequency':
-            parsed = parse_f(self.query('F'))
+            parsed = self._parse('F', parse_f, self.query('F'))
             if parsed:
                 self._store_frequency(parsed)
             return bool(parsed)
-        parsed = parse_setting(key, self.query(SETTINGS[key].read_command))
+        command = SETTINGS[key].read_command
+        parsed = self._parse(command, lambda r: parse_setting(key, r), self.query(command))
         if parsed:
             self.settings.update({k: v for k, v in parsed.items() if v is not None})
         return bool(parsed)
 
     def _read_features(self):
-        parsed = parse_features(self.query('TE?'))
+        parsed = self._parse('TE?', parse_features, self.query('TE?'))
         if parsed:
             self.slow_flags.update(parsed)
         return bool(parsed)
 
     def _read_into_slow_data(self, command, parser):
-        parsed = parser(self.query(command))
+        parsed = self._parse(command, parser, self.query(command))
         if not parsed:
             return False
         data, flags = parsed if isinstance(parsed, tuple) else (parsed, {})
@@ -1128,7 +1162,7 @@ class JSDSOLAR232:
         return True
 
     def _read_gfail(self):
-        parsed = parse_gfail(self.query('GFAIL'))
+        parsed = self._parse('GFAIL', parse_gfail, self.query('GFAIL'))
         if not parsed:
             return False
         # Drop the previous snapshot: with fault code 0 its fields are not sent again
@@ -1189,6 +1223,7 @@ class JSDSOLAR232:
 
     def get_data(self):
         """Poll one cycle. Returns (sensor values, binary flags); empty dicts if the inverter is silent."""
+        started = time.monotonic()
         if not self.identity and self.cycle % self.BACKOFF_CYCLES == 0:
             self.update_identity()
 
@@ -1218,7 +1253,11 @@ class JSDSOLAR232:
             self._battery_voltage = fast_data['battery_voltage']
         data = {**self.settings, **self.slow_data, **fast_data, **self.identity}
         flags = {**self.slow_flags, **fast_flags}
-        return {k: v for k, v in data.items() if v is not None}, flags
+        data = {k: v for k, v in data.items() if v is not None}
+        if self.log_depth >= LOG_BASIC:
+            self.logger.info("Cycle %d: %d values, %d flags, %.1f s, slow queue %d left",
+                             self.cycle, len(data), len(flags), time.monotonic() - started, len(self._slow_queue))
+        return data, flags
 
     # --- Writes (user actions only) ----------------------------------------------------------
 

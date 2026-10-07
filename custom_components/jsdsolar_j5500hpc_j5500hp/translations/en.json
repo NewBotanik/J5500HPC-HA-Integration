@@ -35,15 +35,28 @@
   "options": {
     "step": {
       "init": {
-        "title": "Inverter control",
-        "description": "When enabled, inverter settings become editable (number/select), feature flags become switches, and control buttons are added. Every change is checked, must be confirmed by the inverter and is read back. The Power Off, Reset Energy Counters and Factory Reset buttons start disabled in the entity settings.",
+        "title": "Integration options",
+        "description": "Poll interval and debug logging apply to every device type. Inverter control (JSD SOLAR only) turns the settings into editable entities and adds control buttons; every change is checked, must be confirmed by the inverter and is read back. The Power Off, Reset Energy Counters and Factory Reset buttons start disabled in the entity settings.",
         "data": {
+          "poll_interval": "Poll interval (inverter: 10 s or more)",
+          "debug_logging": "Enable debug logging",
+          "log_depth": "Logging depth",
           "jsd_enable_control": "Enable inverter control (change settings)"
+        },
+        "data_description": {
+          "debug_logging": "Writes to the Home Assistant log (Settings → System → Logs). Turn it off when done: deep levels write a lot.",
+          "log_depth": "Basic: cycle summary, identity, writes. Protocol: + every frame sent and received, with response time. Parsing: + parsed values of every command."
         }
       }
-    },
-    "abort": {
-      "no_options": "This device type has no options."
+    }
+  },
+  "selector": {
+    "log_depth": {
+      "options": {
+        "basic": "Basic",
+        "protocol": "Protocol (TX/RX frames)",
+        "parsing": "Protocol + parsing"
+      }
     }
   }
 }

@@ -20,6 +20,12 @@ from .const import (
     CONF_JK_DISPLAY_INDEX_START,
     CONF_MAX_PARALLEL,
     CONF_JSD_ENABLE_CONTROL,
+    CONF_DEBUG_LOGGING,
+    CONF_LOG_DEPTH,
+    DEFAULT_LOG_DEPTH,
+    LOG_DEPTH_BASIC,
+    LOG_DEPTH_PROTOCOL,
+    LOG_DEPTH_PARSING,
     BMS_TYPE_PACE_LV,
     BMS_TYPE_PACE_LV_WIFI,
     BMS_TYPE_JK_PB,
@@ -33,7 +39,7 @@ from .pacebms_rs485 import PACEBMS485
 from .pacebms_wifi import PACEBMSWIFI
 from .jkbms_rs485 import JKBMS485
 from .tdtbms_rs232 import TDTBMS232
-from .jsdsolar_rs232 import JSDSOLAR232
+from .jsdsolar_rs232 import JSDSOLAR232, LOG_OFF, LOG_BASIC, LOG_PROTOCOL, LOG_PARSING
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +80,15 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
         self.jk_display_index_start = entry.data.get(CONF_JK_DISPLAY_INDEX_START, "01")
         self.jsd_control = entry.options.get(CONF_JSD_ENABLE_CONTROL, False)
         
-        poll_interval = entry.data.get(CONF_POLL_INTERVAL, 5)
+        # Options (Configure) override the poll interval chosen at setup
+        poll_interval = int(entry.options.get(CONF_POLL_INTERVAL, entry.data.get(CONF_POLL_INTERVAL, 5)))
+        self.log_depth = LOG_OFF
+        if entry.options.get(CONF_DEBUG_LOGGING, False):
+            self.log_depth = {
+                LOG_DEPTH_BASIC: LOG_BASIC,
+                LOG_DEPTH_PROTOCOL: LOG_PROTOCOL,
+                LOG_DEPTH_PARSING: LOG_PARSING,
+            }.get(entry.options.get(CONF_LOG_DEPTH, DEFAULT_LOG_DEPTH), LOG_PROTOCOL)
         super().__init__(
             hass,
             _LOGGER,
@@ -159,7 +173,8 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                 data_refresh_interval=self.update_interval.total_seconds(),
                 debug=0,
                 if_random=0,
-                allow_writes=self.jsd_control
+                allow_writes=self.jsd_control,
+                log_depth=self.log_depth
             )
         else:
             raise Exception(f"Unsupported BMS type: {self.bms_type}")

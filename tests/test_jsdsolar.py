@@ -3,6 +3,7 @@
 # Needs no Home Assistant. Run: python tests/test_jsdsolar.py
 
 import datetime
+import logging
 import os
 import re
 import sys
@@ -208,6 +209,41 @@ results.append(check("Control commands", [c for c in ('SOFF', 'SPON2', 'DATE2512
                      ['SOFF', 'SPON2', 'DATE251203', 'TIME051203']))
 results.append(raises("Silent write raises", TimeoutError, inverter.run_action, 'reset_energy_counters'))
 results.append(check("Calibration never sent", [c for c in comm.sent if c[:3] in ('BA0', 'B1A', 'B2A', 'PA0')], []))
+
+# Debug log depth: each level adds its own records, off writes none of them
+class Capture(logging.Handler):
+    def __init__(self):
+        super().__init__(logging.DEBUG)
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+
+def log_messages(depth):
+    capture = Capture()
+    logger = logging.getLogger(jsd.__name__)
+    logger.addHandler(capture)
+    logger.setLevel(logging.DEBUG)
+    try:
+        jsd.JSDSOLAR232(bms_comm=FakeComm(jsd.SAMPLE_RESPONSES), data_refresh_interval=5, log_depth=depth).get_data()
+    finally:
+        logger.removeHandler(capture)
+        logger.setLevel(logging.NOTSET)
+    return capture.messages
+
+
+def kinds(messages):
+    return {kind for kind, prefix in (('cycle', 'Cycle '), ('tx', 'TX '), ('rx', 'RX '), ('parsed', 'Parsed '))
+            if any(m.startswith(prefix) for m in messages)}
+
+
+results.append(check("Log depth off", kinds(log_messages(jsd.LOG_OFF)), set()))
+results.append(check("Log depth basic", kinds(log_messages(jsd.LOG_BASIC)), {'cycle'}))
+results.append(check("Log depth protocol", kinds(log_messages(jsd.LOG_PROTOCOL)), {'cycle', 'tx', 'rx'}))
+results.append(check("Log depth parsing", kinds(log_messages(jsd.LOG_PARSING)), {'cycle', 'tx', 'rx', 'parsed'}))
+protocol_lines = log_messages(jsd.LOG_PROTOCOL)
+results.append(check("RX line shows frame and time", any(m.startswith("RX '(B'") and m.endswith(' ms)') for m in protocol_lines), True))
 
 print(f"\n{sum(results)}/{len(results)} checks passed")
 raise SystemExit(0 if all(results) else 1)

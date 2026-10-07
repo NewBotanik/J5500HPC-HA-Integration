@@ -5,6 +5,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
@@ -19,6 +20,10 @@ from .const import (
     CONF_JK_DISPLAY_INDEX_START,
     CONF_MAX_PARALLEL,
     CONF_JSD_ENABLE_CONTROL,
+    CONF_DEBUG_LOGGING,
+    CONF_LOG_DEPTH,
+    LOG_DEPTHS,
+    DEFAULT_LOG_DEPTH,
     BMS_TYPES,
     BMS_TYPE_JSD_SOLAR,
     CONNECTION_TYPES,
@@ -118,24 +123,33 @@ class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
-    """Options of an entry; for now only the JSD SOLAR control switch."""
+    """Options of an entry: poll interval, debug logging and, for JSD SOLAR, inverter control."""
 
     def __init__(self, config_entry):
         # Stored under a private name: HA 2024.12+ provides self.config_entry itself
         self._entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        if self._entry.data.get(CONF_BMS_TYPE) != BMS_TYPE_JSD_SOLAR:
-            return self.async_abort(reason="no_options")
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        options_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_JSD_ENABLE_CONTROL,
-                    default=self._entry.options.get(CONF_JSD_ENABLE_CONTROL, False),
-                ): bool,
-            }
-        )
-        return self.async_show_form(step_id="init", data_schema=options_schema)
+        options = self._entry.options
+        poll_interval = options.get(CONF_POLL_INTERVAL, self._entry.data.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
+        fields = {
+            vol.Required(CONF_POLL_INTERVAL, default=poll_interval): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=3600, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(CONF_DEBUG_LOGGING, default=options.get(CONF_DEBUG_LOGGING, False)): bool,
+            vol.Required(CONF_LOG_DEPTH, default=options.get(CONF_LOG_DEPTH, DEFAULT_LOG_DEPTH)): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=LOG_DEPTHS, translation_key="log_depth", mode=selector.SelectSelectorMode.DROPDOWN
+                )
+            ),
+        }
+        if self._entry.data.get(CONF_BMS_TYPE) == BMS_TYPE_JSD_SOLAR:
+            fields[vol.Required(
+                CONF_JSD_ENABLE_CONTROL, default=options.get(CONF_JSD_ENABLE_CONTROL, False)
+            )] = bool
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))

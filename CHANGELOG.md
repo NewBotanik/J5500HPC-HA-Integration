@@ -4,6 +4,13 @@ description:
 
 # Changelog
 
+## [3.1.0] - 2026-10-07
+### Added
+-   Options form (**Configure**) for every device type: **poll interval** (changes without re-adding the device), **Enable debug logging** and **Logging depth**. Inverter control stays in the same form for JSD SOLAR.
+-   [JSD SOLAR] Logging depth levels: *Basic* (cycle summary, identity, writes), *Protocol* (+ every frame sent and received, with response time), *Protocol + parsing* (+ parsed values of every command). The integration logger is switched to the deepest level any entry asks for and back when debugging is turned off.
+
+---------------
+
 ## [3.0.1] - 2026-10-06
 ### Added
 -   Translations (English, Ukrainian) for the setup and options forms. The **Configure** form now explains the **Enable inverter control** option, which turns the read-only inverter settings into editable entities.
