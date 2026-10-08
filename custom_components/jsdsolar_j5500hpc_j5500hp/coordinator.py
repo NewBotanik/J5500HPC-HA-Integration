@@ -31,6 +31,10 @@ from .const import (
     BMS_TYPE_JK_PB,
     BMS_TYPE_TDT,
     BMS_TYPE_JSD_SOLAR,
+    BMS_TYPE_JK_BALANCER,
+    CONF_JK_BALANCER_ADDRESS,
+    CONF_JK_BALANCER_ENABLE_CONTROL,
+    DEFAULT_JK_BALANCER_ADDRESS,
 )
 
 from .bms_comm import BMSCommunication
@@ -39,6 +43,7 @@ from .pacebms_rs485 import PACEBMS485
 from .pacebms_wifi import PACEBMSWIFI
 from .jkbms_rs485 import JKBMS485
 from .tdtbms_rs232 import TDTBMS232
+from .jkbalancer_rs485 import JKBalancer485
 from .jsdsolar_rs232 import JSDSOLAR232, LOG_OFF, LOG_BASIC, LOG_PROTOCOL, LOG_PARSING
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,6 +85,8 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
         self.max_parallel = entry.data.get(CONF_MAX_PARALLEL, 16)
         self.jk_display_index_start = entry.data.get(CONF_JK_DISPLAY_INDEX_START, "01")
         self.jsd_control = entry.options.get(CONF_JSD_ENABLE_CONTROL, False)
+        self.jk_balancer_control = entry.options.get(CONF_JK_BALANCER_ENABLE_CONTROL, False)
+        self.jk_balancer_address = int(entry.options.get(CONF_JK_BALANCER_ADDRESS, DEFAULT_JK_BALANCER_ADDRESS))
         
         # Options (Configure) override the poll interval chosen at setup
         poll_interval = int(entry.options.get(CONF_POLL_INTERVAL, entry.data.get(CONF_POLL_INTERVAL, 5)))
@@ -177,6 +184,13 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                 allow_writes=self.jsd_control,
                 log_depth=self.log_depth
             )
+        elif self.bms_type == BMS_TYPE_JK_BALANCER:
+            self.bms = JKBalancer485(
+                bms_comm=self.bms_comm,
+                address=self.jk_balancer_address,
+                allow_writes=self.jk_balancer_control,
+                log_depth=self.log_depth
+            )
         else:
             raise Exception(f"Unsupported BMS type: {self.bms_type}")
 
@@ -193,6 +207,18 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
         """Synchronous update call running inside thread executor."""
         if not self.bms:
             raise UpdateFailed("BMS driver is not set up")
+
+        # JK balancer: one device, no packs
+        if self.bms_type == BMS_TYPE_JK_BALANCER:
+            balancer_data, balancer_flags = self.bms.get_data()
+            if not balancer_data:
+                raise UpdateFailed(f"No answer from JK balancer at address {self.jk_balancer_address}")
+            return {
+                "analog": [],
+                "warning": [],
+                "balancer": balancer_data,
+                "balancer_flags": balancer_flags,
+            }
 
         # Inverter: one device, no packs
         if self.bms_type == BMS_TYPE_JSD_SOLAR:

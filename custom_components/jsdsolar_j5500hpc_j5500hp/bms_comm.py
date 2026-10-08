@@ -464,3 +464,54 @@ class BMSCommunication:
             self.logger.error(f"JK BMS passive receive error: {e}")
             return None
 
+
+    def read_bytes(self, size, timeout=1.0):
+        """
+        Read up to `size` raw bytes within `timeout` seconds, for binary request/response
+        protocols with fixed-length frames (e.g. the JK balancer). Returns b'' when nothing
+        arrives. New method: the line-based receive_data() and the JK BMS helpers are unchanged.
+        """
+        import time
+        if not self.bms_connection:
+            return b''
+        connection = self.bms_connection
+        try:
+            if hasattr(connection, 'in_waiting'):
+                # Serial: one read with a temporary timeout
+                original_timeout = connection.timeout
+                connection.timeout = timeout
+                try:
+                    data = connection.read(size)
+                finally:
+                    connection.timeout = original_timeout
+                return data
+
+            # TCP: serve leftovers first, then read until size or deadline
+            data = self._tcp_buffer[:size]
+            self._tcp_buffer = self._tcp_buffer[size:]
+            deadline = time.monotonic() + timeout
+            original_timeout = connection.gettimeout()
+            try:
+                while len(data) < size:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    connection.settimeout(remaining)
+                    try:
+                        chunk = connection.recv(size - len(data))
+                    except socket.timeout:
+                        break
+                    if not chunk:
+                        # Peer closed the socket: reconnect on the next send
+                        self.logger.warning("Connection closed by the remote side")
+                        self.disconnect()
+                        break
+                    data += chunk
+            finally:
+                if self.bms_connection:
+                    connection.settimeout(original_timeout)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error reading raw bytes: {e}")
+            self.disconnect()
+            return b''

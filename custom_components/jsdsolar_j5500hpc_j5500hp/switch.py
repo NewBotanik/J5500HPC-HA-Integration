@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .jsdsolar_rs232 import FEATURE_KEYS
 from .jsdsolar_entity import JSDSolarEntity, add_entities_for_new_keys, control_enabled
+from . import jkbalancer_entity
 
 
 async def async_setup_entry(
@@ -15,6 +16,9 @@ async def async_setup_entry(
 ):
     """Set up feature-flag switches once TE? has been read; nothing for BMS entries or with control off."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    if jkbalancer_entity.is_balancer(coordinator):
+        jkbalancer_entity.setup_switches(coordinator, entry, async_add_entities)
+        return
     if not control_enabled(coordinator):
         return
 

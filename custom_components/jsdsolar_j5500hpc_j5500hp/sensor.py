@@ -10,6 +10,7 @@ from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN, BMS_TYPE_JK_PB, BMS_TYPE_JSD_SOLAR
 from .jsdsolar_rs232 import SETTINGS as JSD_SETTINGS, GFAIL_RAW_FIELDS, sensor_meta
 from .jsdsolar_entity import JSDSolarEntity, add_entities_for_new_keys, control_enabled
+from . import jkbalancer_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,6 +89,9 @@ async def async_setup_entry(
 
     if coordinator.bms_type == BMS_TYPE_JSD_SOLAR:
         _setup_inverter_sensors(coordinator, entry, async_add_entities)
+        return
+    if jkbalancer_entity.is_balancer(coordinator):
+        jkbalancer_entity.setup_sensors(coordinator, entry, async_add_entities)
         return
 
     initial_entities = []

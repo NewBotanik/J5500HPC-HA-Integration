@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, BMS_TYPE_JSD_SOLAR
 from .jsdsolar_rs232 import FEATURE_KEYS, is_problem_flag
 from .jsdsolar_entity import JSDSolarEntity, add_entities_for_new_keys, control_enabled
+from . import jkbalancer_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ async def async_setup_entry(
 
     if coordinator.bms_type == BMS_TYPE_JSD_SOLAR:
         _setup_inverter_binary_sensors(coordinator, entry, async_add_entities)
+        return
+    if jkbalancer_entity.is_balancer(coordinator):
+        jkbalancer_entity.setup_binary_sensors(coordinator, entry, async_add_entities)
         return
 
     # Track registered pack IDs

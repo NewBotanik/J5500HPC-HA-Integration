@@ -26,18 +26,31 @@ from .const import (
     DEFAULT_LOG_DEPTH,
     BMS_TYPES,
     BMS_TYPE_JSD_SOLAR,
+    BMS_TYPE_JK_BALANCER,
     CONNECTION_TYPES,
     BATTERY_PORTS,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_MAX_PARALLEL,
     DEFAULT_BAUD_RATE,
     DEFAULT_JSD_SOLAR_BAUD_RATE,
+    DEFAULT_JK_BALANCER_BAUD_RATE,
+    DEFAULT_JK_BALANCER_ADDRESS,
+    CONF_JK_BALANCER_ADDRESS,
+    CONF_JK_BALANCER_ENABLE_CONTROL,
     DEFAULT_IP_PORT,
     CONN_TYPE_SERIAL,
     DEFAULT_JK_DISPLAY_INDEX_START,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _default_baud(bms_type):
+    if bms_type == BMS_TYPE_JSD_SOLAR:
+        return DEFAULT_JSD_SOLAR_BAUD_RATE
+    if bms_type == BMS_TYPE_JK_BALANCER:
+        return DEFAULT_JK_BALANCER_BAUD_RATE
+    return DEFAULT_BAUD_RATE
 
 class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Gobel Battery."""
@@ -109,8 +122,8 @@ class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             return self.async_create_entry(title=user_data["device_name"], data=user_data)
 
-        # JSD SOLAR inverters talk at a fixed 2400 baud
-        default_baud = DEFAULT_JSD_SOLAR_BAUD_RATE if self.config_data[CONF_BMS_TYPE] == BMS_TYPE_JSD_SOLAR else DEFAULT_BAUD_RATE
+        # JSD SOLAR inverters talk at a fixed 2400 baud, the JK balancer at 9600
+        default_baud = _default_baud(self.config_data[CONF_BMS_TYPE])
         serial_schema = vol.Schema(
             {
                 vol.Required(CONF_USB_PORT, default="/dev/ttyUSB0"): str,
@@ -144,7 +157,7 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
         fields = {}
         # Connection of this entry: serial port and baud rate, or bridge IP and TCP port
         if data.get(CONF_CONNECTION_TYPE) == CONN_TYPE_SERIAL:
-            default_baud = DEFAULT_JSD_SOLAR_BAUD_RATE if data.get(CONF_BMS_TYPE) == BMS_TYPE_JSD_SOLAR else DEFAULT_BAUD_RATE
+            default_baud = _default_baud(data.get(CONF_BMS_TYPE))
             fields[vol.Required(CONF_USB_PORT, default=current(CONF_USB_PORT, "/dev/ttyUSB0"))] = str
             fields[vol.Required(CONF_BAUD_RATE, default=current(CONF_BAUD_RATE, default_baud))] = selector.NumberSelector(
                 selector.NumberSelectorConfig(min=300, max=921600, step=1, mode=selector.NumberSelectorMode.BOX)
@@ -170,5 +183,14 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
         if self._entry.data.get(CONF_BMS_TYPE) == BMS_TYPE_JSD_SOLAR:
             fields[vol.Required(
                 CONF_JSD_ENABLE_CONTROL, default=options.get(CONF_JSD_ENABLE_CONTROL, False)
+            )] = bool
+        if self._entry.data.get(CONF_BMS_TYPE) == BMS_TYPE_JK_BALANCER:
+            fields[vol.Required(
+                CONF_JK_BALANCER_ADDRESS, default=options.get(CONF_JK_BALANCER_ADDRESS, DEFAULT_JK_BALANCER_ADDRESS)
+            )] = selector.NumberSelector(
+                selector.NumberSelectorConfig(min=1, max=255, step=1, mode=selector.NumberSelectorMode.BOX)
+            )
+            fields[vol.Required(
+                CONF_JK_BALANCER_ENABLE_CONTROL, default=options.get(CONF_JK_BALANCER_ENABLE_CONTROL, False)
             )] = bool
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))

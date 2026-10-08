@@ -4,6 +4,15 @@ description:
 
 # Changelog
 
+## [3.3.0] - 2026-10-08
+### Added
+-   [JK Balancer] New device type `JK_BALANCER` for the JK-DZ11-B2A24S stand-alone active balancer over RS485 (vendor protocol V1.3: 9600 baud, `55 AA` request / 74-byte `EB 90` reply, additive checksum). Reads total and per-cell voltages, average/max/min/delta, highest/lowest cell, balancing state and current, trigger delta, max balancing current, balancing switch, configured and detected cell count, temperature and the three alarm bits.
+-   [JK Balancer] Optional control (Configure → **Enable balancer control**): cell count (2–24), balancing trigger delta (2–1000 mV), max balancing current (30–1000 mA) and balancing on/off. The balancer echoes the active value; a write it does not take raises an error. RS485 slave address is set under Configure (default 1).
+-   `bms_comm.read_bytes()` for fixed-length binary replies; existing transport methods are unchanged.
+-   Offline test `python tests/test_jkbalancer.py` against the vendor example frames.
+
+---------------
+
 ## [3.2.1] - 2026-10-07
 ### Changed
 -   New integration icons in the Home Assistant brand sizes (`icon.png` 256×256, `icon@2x.png` 512×512), regenerated from the full-resolution `J5500HPC.png` with a sharper downscale so the "jsdsolar" lettering stays readable.

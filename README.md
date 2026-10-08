@@ -48,6 +48,16 @@ Unlike the previous Add-on version, this integration **does not require an MQTT 
 
 ---
 
+## JK-DZ11-B2A24S Active Balancer (RS485) Connection Instructions:
+- **RS485-USB cable or RS485-to-Ethernet/WiFi bridge** connected to the balancer's RS485 port (A to A, B to B).
+- **Device type**: `JK_BALANCER`. This is a different protocol from `JK_PB`: the balancer only answers requests and never streams data, so a `JK_PB` entry stays unavailable with it.
+- **Serial settings**: **9600 baud, 8N1** (the serial step proposes 9600). A bridge must be set the same way.
+- **Address**: the RS485 slave address of the balancer, 1 by default; change it under **Configure** if needed.
+- **Control (optional)**: under **Configure**, turn on **Enable balancer control** to change the cell count, balancing trigger delta, maximum balancing current and switch balancing on or off.
+- Protocol: [docs/protocols/JK-DZ11B2A224S_RS485_V1.3_en.md](docs/protocols/JK-DZ11B2A224S_RS485_V1.3_en.md).
+
+---
+
 ## Installation:
 
 ### Option 1: Via HACS (Recommended)

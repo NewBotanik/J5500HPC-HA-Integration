@@ -14,7 +14,7 @@ Forked from `fancyui/Gobel-Battery-HA-Integration`. The sibling repo `../J5500HP
 
 ## Commands
 
-- No linter, no HA test harness. Offline driver test (no HA needed): `python tests/test_jsdsolar.py`
+- No linter, no HA test harness. Offline driver test (no HA needed): `python tests/test_jsdsolar.py`, `python tests/test_jkbalancer.py`
 - Syntax check: `python -m py_compile custom_components/jsdsolar_j5500hpc_j5500hp/*.py`
 - CI: `.github/workflows/hacs.yml` (HACS validation) and `hassfest.yaml`.
 - Version lives in `custom_components/jsdsolar_j5500hpc_j5500hp/manifest.json` (`version`). Every version change needs a `CHANGELOG.md` entry.
@@ -30,9 +30,11 @@ __init__.py → coordinator.py (DataUpdateCoordinator, runs drivers in the execu
                 → jkbms_rs485.py        JK over RS485, passive listener thread
                 → tdtbms_rs232.py       TDT over RS232, command/response
                 → jsdsolar_rs232.py     JSD SOLAR inverter, ASCII command/response
+                → jkbalancer_rs485.py   JK-DZ11-B2A24S balancer, binary request/response (9600)
             → sensor.py / binary_sensor.py   entities built from coordinator.data
             → number.py / select.py / switch.py / button.py   JSD SOLAR control (option)
             → jsdsolar_entity.py   shared JSD entity base, device card, write helper
+            → jkbalancer_entity.py  JK balancer entities (sensor/binary/number/switch)
 config_flow.py   UI setup: user step (type, connection, port) → network or serial step
 const.py         config keys, BMS_TYPES, defaults
 ```
@@ -44,12 +46,13 @@ const.py         config keys, BMS_TYPES, defaults
 
 ## Key conventions
 
-- **Isolation rule**: a change to one driver (`pacebms_*.py`, `jkbms_rs485.py`, `tdtbms_rs232.py`, `jsdsolar_rs232.py`) must not affect the others. In shared files (`coordinator.py`, `sensor.py`, `binary_sensor.py`, `config_flow.py`), add device-specific code as a separate `bms_type` branch. See also `.agents/rules/ha-addon.md`.
+- **Isolation rule**: a change to one driver (`pacebms_*.py`, `jkbms_rs485.py`, `tdtbms_rs232.py`, `jsdsolar_rs232.py`, `jkbalancer_rs485.py`) must not affect the others. In shared files (`coordinator.py`, `sensor.py`, `binary_sensor.py`, `config_flow.py`), add device-specific code as a separate `bms_type` branch. See also `.agents/rules/ha-addon.md`.
 - **Do not change `bms_comm.py` behaviour** for one device. All drivers share it.
 - **JSD SOLAR writes**: polling (`get_data()`) sends queries only; `tests/test_jsdsolar.py` asserts this. Settings (§9) and control (§7) commands are sent only from `set_setting` / `set_feature` / `run_action`, called by number/select/switch/button entities on a user action, and only when the entry option `jsd_enable_control` is on (`allow_writes`). Every write: range check → `<cmd><value>` → must get `ACK` → read back. Never send calibration (§10). `SOFF`, `Q`, `ED1` buttons are disabled by default in the entity registry.
 - **JSD SOLAR polling**: parsers are pure functions; missing fields become `None` and are not exposed. Link budget: 2400 baud, about 5 s per cycle, 3 s per unanswered command. So the fast set (§4.5) runs every cycle, everything else (settings, `TE?`, `TCQN`, `DATE`/`TIME`, `GFAIL`, `GCF`, parallel units) goes through a slow queue, 3 per cycle; failing commands back off; the coordinator timeout for JSD is 60 s. A driver lock keeps writes and polling from interleaving on the wire.
 - **JSD SOLAR settings** are described once in `jsdsolar_rs232.SETTINGS` (command, width, type, options, range); keys shared with GCHG/GBAT fields (e.g. `setting_cv_voltage`) hold the same value from both sources. With control on, settings are number/select entities instead of sensors, and feature flags are switches instead of binary sensors.
 - **Options flow** (Configure, every device type): connection (`usb_port` + `baud_rate`, or `ip_address` + `ip_port`) and `poll_interval`, both overriding the setup values (coordinator reads `options` first, then `data`), `debug_logging` + `log_depth` (`basic` / `protocol` / `parsing`), and `jsd_enable_control` for JSD SOLAR. Saving reloads the entry. `__init__._apply_log_level()` sets the package logger to the deepest level any loaded entry asks for (`protocol`/`parsing` → DEBUG, `basic` → INFO, none → NOTSET). The JSD driver gates its own records by `log_depth` (`LOG_BASIC` cycle summary, `LOG_PROTOCOL` TX/RX with response time, `LOG_PARSING` parsed values); BMS drivers only get the logger level.
+- **JK balancer** (`JK_BALANCER`) is not the JK BMS (`JK_PB`): request `55 AA addr cmd u16 sum`, 74-byte reply `EB 90 …`, big-endian, checksum `sum & 0xFF`. It uses the new `bms_comm.read_bytes()` (fixed length, resync on `EB 90`). Coordinator data: `{"balancer": {...}, "balancer_flags": {...}}`, unique ID `{entry_id}_balancer_{key}`. Polling sends only `0xFF`; `0xF0/F2/F4/F6` only from number/switch entities with option `jk_balancer_enable_control`; the reply echoes the active value and a mismatch is an error. Options: `jk_balancer_address` (default 1).
 - **Pack ID**: use the pack id from the ACK data to tell packs apart.
 - **Entity naming**: BMS `"{device_name} Pack NN {metric}"`, unique ID `{entry_id}_pack_{id}_{metric}`; overall `{entry_id}_total_{key}`.
 - **Commit format**: conventional commits: `feat:`, `fix:`, `chore:`, `docs:`.
@@ -60,5 +63,6 @@ const.py         config keys, BMS_TYPES, defaults
 
 - `docs/protocols/JK-BMS-55AA-Protocol_EN.md` / `_ZH.md`: JK BMS 55AA frame protocol
 - `docs/protocols/pc-bms-RS232-Protocol_en.md`: PACE BMS RS232 protocol
+- `docs/protocols/JK-DZ11B2A224S_RS485_V1.3_en.md` / `_uk.md` (+ vendor PDF): JK-DZ11-B2A24S balancer RS485 protocol; `jikong_active_balancer.md` / `_uk.md`: BLE vs RS485 notes, aiobmsble and mpp-solar comparison
 - `docs/protocols/protocol.JSDSOLAR.en.md` / `.uk.md`: JSD SOLAR inverter RS232 protocol. Read §14 (errors in the vendor document) before trusting an example.
 - The J5500HPC does not answer Voltronic PI30/PI18/PI17/PI16 commands (`QPIGS`, `^P005GS`, …). An ESPHome UART probe confirmed this, so the JSD protocol is the only option.
