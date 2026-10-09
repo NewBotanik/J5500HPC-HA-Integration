@@ -291,6 +291,7 @@ with the JK app over BLE at the same time:
 | Temperature (offset 71) | °C | **0.1 °C**: `00 BE` = 190 while the app shows 18.9 °C |
 | Alarm bit 0 (offset 12) | cell-count setting error | **set on a healthy device** (configured = detected = 16, app: "functioning properly"); meaning unknown |
 | Cell connection resistances | not in the RS485 protocol | Only over BLE (JK02 `0x02` frame, offset 80); the app shows the same values as the BLE log above |
+| JK02 over RS485 | – | **No answer** to the JK02 `0x97` / `0x96` requests on the RS485 port (Node-RED probe), while the V1.3 `0xFF` read works; RS485 speaks V1.3 only |
 
 Real frame (checksum verified):
 

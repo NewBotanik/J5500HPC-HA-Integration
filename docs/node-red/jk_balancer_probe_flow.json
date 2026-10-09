@@ -11,7 +11,15 @@
     "type": "inject",
     "z": "jkprobe_tab",
     "name": "1  V1.3 read 0xFF",
-    "props": [{ "p": "payload" }, { "p": "topic", "vt": "str" }],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
     "repeat": "",
     "once": false,
     "topic": "V1.3 0xFF",
@@ -19,14 +27,26 @@
     "payloadType": "bin",
     "x": 150,
     "y": 80,
-    "wires": [["jkprobe_tx"]]
+    "wires": [
+      [
+        "jkprobe_tx"
+      ]
+    ]
   },
   {
     "id": "jkprobe_97",
     "type": "inject",
     "z": "jkprobe_tab",
     "name": "2  JK02 0x97 device info",
-    "props": [{ "p": "payload" }, { "p": "topic", "vt": "str" }],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
     "repeat": "",
     "once": false,
     "topic": "JK02 0x97",
@@ -34,14 +54,26 @@
     "payloadType": "bin",
     "x": 170,
     "y": 130,
-    "wires": [["jkprobe_tx"]]
+    "wires": [
+      [
+        "jkprobe_tx"
+      ]
+    ]
   },
   {
     "id": "jkprobe_96",
     "type": "inject",
     "z": "jkprobe_tab",
     "name": "3  JK02 0x96 cell info",
-    "props": [{ "p": "payload" }, { "p": "topic", "vt": "str" }],
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
     "repeat": "",
     "once": false,
     "topic": "JK02 0x96",
@@ -49,7 +81,11 @@
     "payloadType": "bin",
     "x": 160,
     "y": 180,
-    "wires": [["jkprobe_tx"]]
+    "wires": [
+      [
+        "jkprobe_tx"
+      ]
+    ]
   },
   {
     "id": "jkprobe_tx",
@@ -60,7 +96,14 @@
     "outputs": 2,
     "x": 410,
     "y": 130,
-    "wires": [["jkprobe_out"], ["jkprobe_debug"]]
+    "wires": [
+      [
+        "jkprobe_out"
+      ],
+      [
+        "jkprobe_debug"
+      ]
+    ]
   },
   {
     "id": "jkprobe_out",
@@ -80,18 +123,26 @@
     "serial": "jkprobe_port",
     "x": 400,
     "y": 240,
-    "wires": [["jkprobe_rx"]]
+    "wires": [
+      [
+        "jkprobe_rx"
+      ]
+    ]
   },
   {
     "id": "jkprobe_rx",
     "type": "function",
     "z": "jkprobe_tab",
     "name": "describe RX",
-    "func": "const b = msg.payload;\nconst tx = flow.get('lastTx') || {};\nconst hex = b.toString('hex').match(/../g).join(' ');\nlet kind = 'unknown';\nconst sumOk = b.length > 1 && (b.slice(0, -1).reduce((a, x) => a + x, 0) & 0xFF) === b[b.length - 1];\nif (b[0] === 0xEB && b[1] === 0x90) kind = 'V1.3 reply EB 90';\nelse if (b[0] === 0x55 && b[1] === 0xAA && b[2] === 0xEB && b[3] === 0x90) kind = 'JK02 frame type 0x' + b[4].toString(16).padStart(2, '0');\nelse if (b[0] === 0xAA && b[1] === 0x55 && b[2] === 0x90 && b[3] === 0xEB) kind = 'JK02 command/ready 0x' + b[4].toString(16).padStart(2, '0');\nconst ms = tx.at ? (Date.now() - tx.at) + ' ms after ' + tx.topic : '';\nnode.status({ text: b.length + ' B, ' + kind });\nmsg.payload = 'RX ' + b.length + ' bytes, ' + kind + ', checksum ' + (sumOk ? 'ok' : 'no') + (ms ? ', ' + ms : '') + ':\\n' + hex;\nreturn msg;",
+    "func": "// Accept whatever the serial node delivers: Buffer, string, byte array or anything else\nconst raw = msg.payload;\nlet b = null;\nif (Buffer.isBuffer(raw)) b = raw;\nelse if (typeof raw === 'string') b = Buffer.from(raw, 'latin1');\nelse if (Array.isArray(raw)) b = Buffer.from(raw);\nconst tx = flow.get('lastTx') || {};\nconst ms = tx.at ? (Date.now() - tx.at) + ' ms after ' + tx.topic : '';\nif (!b) {\n  node.status({ fill: 'red', shape: 'ring', text: 'non-binary payload: ' + typeof raw });\n  msg.payload = 'RX non-binary payload (' + typeof raw + '), check the serial config node: ' + JSON.stringify(raw) + (ms ? ', ' + ms : '');\n  return msg;\n}\nconst note = Buffer.isBuffer(raw) ? '' : ' (arrived as ' + (Array.isArray(raw) ? 'array' : 'string') + ': set Output to binary buffers)';\nconst hex = b.length ? b.toString('hex').match(/../g).join(' ') : '';\nlet kind = 'unknown';\nif (b[0] === 0xEB && b[1] === 0x90) kind = 'V1.3 reply EB 90';\nelse if (b[0] === 0x55 && b[1] === 0xAA && b[2] === 0xEB && b[3] === 0x90) kind = 'JK02 frame type 0x' + b[4].toString(16).padStart(2, '0');\nelse if (b[0] === 0xAA && b[1] === 0x55 && b[2] === 0x90 && b[3] === 0xEB) kind = 'JK02 command/ready 0x' + b[4].toString(16).padStart(2, '0');\nlet sumOk = false;\nif (b.length > 1) {\n  let sum = 0;\n  for (let i = 0; i < b.length - 1; i++) sum += b[i];\n  sumOk = (sum & 0xFF) === b[b.length - 1];\n}\nnode.status({ text: b.length + ' B, ' + kind });\nmsg.payload = 'RX ' + b.length + ' bytes, ' + kind + ', checksum ' + (sumOk ? 'ok' : 'no') + (ms ? ', ' + ms : '') + note + ':\\n' + hex;\nreturn msg;",
     "outputs": 1,
     "x": 590,
     "y": 240,
-    "wires": [["jkprobe_debug"]]
+    "wires": [
+      [
+        "jkprobe_debug"
+      ]
+    ]
   },
   {
     "id": "jkprobe_debug",
