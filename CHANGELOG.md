@@ -4,6 +4,13 @@ description:
 
 # Changelog
 
+## [3.3.3] - 2026-10-09
+### Fixed
+-   [JK Balancer] Temperature is sent in 0.1 °C (the device reports 190 while the JK app shows 18.9 °C); it was shown as 189 °C.
+-   [JK Balancer] Removed the "Alarm Cell Count Error" binary sensor: alarm bit 0 is set on a healthy balancer whose app reports no alarm, so its meaning differs from the vendor document. The raw alarm byte is available as the diagnostic sensor "Alarm Code".
+
+---------------
+
 ## [3.3.2] - 2026-10-09
 ### Changed
 -   The device type in the setup form is a labelled list (e.g. "JK BMS (55AA stream, 115200 baud)" vs "JK-DZ11-B2A24S active balancer (RS485, 9600 baud)"), so the JK BMS and the JK balancer are no longer picked by mistake.

@@ -49,14 +49,16 @@ SENSORS = {
     'balance_trigger_voltage': ('mV', 'mdi:scale-balance', 'voltage', None, 0),
     'max_balance_current': ('mA', 'mdi:current-dc', 'current', None, 0),
     'balancing_state': ('', 'mdi:scale-balance', None, None, None),
-    'temperature': ('°C', 'mdi:thermometer', 'temperature', 'measurement', 0),
+    'temperature': ('°C', 'mdi:thermometer', 'temperature', 'measurement', 1),
+    'alarm_code': ('', 'mdi:alert-circle-outline', None, None, 0),
 }
 CELL_SENSOR = ('mV', 'mdi:battery-outline', 'voltage', 'measurement', 0)
 
-# Binary flags; the alarm_* ones are problems
+# Binary flags; the alarm_* ones are problems. Alarm bit 0 ("cell-count setting error" in the
+# document) is set on a healthy device whose app shows no alarm, so it is only in alarm_code.
 FLAG_KEYS = (
     'balancing_charging', 'balancing_discharging', 'balancing_enabled',
-    'alarm_cell_count_error', 'alarm_wire_resistance_high', 'alarm_battery_overvoltage',
+    'alarm_wire_resistance_high', 'alarm_battery_overvoltage',
 )
 
 
@@ -126,8 +128,9 @@ def parse_status(frame):
         'balance_trigger_voltage': _u16(frame, 17),
         'max_balance_current': _u16(frame, 19),
         'cell_count': configured,
-        # INT16 per the vendor table (mpp-solar reads it unsigned)
-        'temperature': _s16(frame, 71),
+        # INT16 in 0.1 °C: the device sends 190 while its app shows 18.9 °C (the document says °C)
+        'temperature': round(_s16(frame, 71) * 0.1, 1),
+        'alarm_code': alarms,
         'balancing_state': 'Charging cell' if status & 0x01 else 'Discharging cell' if status & 0x02 else 'Idle',
     }
     if cells:
@@ -139,7 +142,6 @@ def parse_status(frame):
         'balancing_charging': bool(status & 0x01),
         'balancing_discharging': bool(status & 0x02),
         'balancing_enabled': frame[21] == 1,
-        'alarm_cell_count_error': bool(alarms & 0x01),
         'alarm_wire_resistance_high': bool(alarms & 0x02),
         'alarm_battery_overvoltage': bool(alarms & 0x04),
     }

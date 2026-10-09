@@ -85,7 +85,7 @@ results.append(check("Average cell", data['cell_voltage_avg'], 3945))
 results.append(check("Cells detected / configured", (data['cell_count_detected'], data['cell_count']), (20, 20)))
 results.append(check("Highest / lowest cell, 1-based", (data['cell_voltage_max_number'], data['cell_voltage_min_number']), (20, 3)))
 results.append(check("Delta, trigger, max current", (data['cell_voltage_delta'], data['balance_trigger_voltage'], data['max_balance_current']), (7, 5, 1000)))
-results.append(check("Temperature", data['temperature'], 22))
+results.append(check("Temperature in 0.1 °C (example 0x0016)", data['temperature'], 2.2))
 results.append(check("Only configured cells exposed", (jk.cell_key(20) in data, jk.cell_key(21) in data), (True, False)))
 results.append(check("Cell 01", data['cell_01_voltage'], 3945))
 results.append(check("Balancing idle", (data['balancing_state'], flags['balancing_charging'], flags['balancing_discharging']), ('Idle', False, False)))
@@ -95,7 +95,7 @@ results.append(check("Every key has metadata", [k for k in data if jk.sensor_met
 negative = bytearray(STATUS)
 negative[71:73] = (-5).to_bytes(2, 'big', signed=True)
 negative[-1] = jk.checksum(negative[:-1])
-results.append(check("Negative temperature (INT16)", jk.parse_status(bytes(negative))[0]['temperature'], -5))
+results.append(check("Negative temperature (INT16)", jk.parse_status(bytes(negative))[0]['temperature'], -0.5))
 
 # Real frame from a JK-DZ11-B2A24S (16 cells, 2 A model), captured with Node-RED
 REAL = frame(
@@ -109,6 +109,9 @@ results.append(check("Real: highest cell 1 (3346 mV), lowest 16 (3344 mV)",
                      (data['cell_voltage_max_number'], data[jk.cell_key(1)], data['cell_voltage_min_number'], data[jk.cell_key(16)]),
                      (1, 3346, 16, 3344)))
 results.append(check("Real: max balance current 2000 mA", data['max_balance_current'], 2000))
+results.append(check("Real: temperature 19.0 °C (app 18.9 °C)", data['temperature'], 19.0))
+results.append(check("Real: alarm byte kept as code, no cell-count alarm flag",
+                     (data['alarm_code'], 'alarm_cell_count_error' in flags), (1, False)))
 results.append(check("Real: 2000 mA within write range", jk.SETTINGS['max_balance_current'][2] >= 2000, True))
 
 # Driver: polling, resync, silence

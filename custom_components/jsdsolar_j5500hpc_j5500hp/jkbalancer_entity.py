@@ -14,7 +14,7 @@ from .jsdsolar_entity import add_entities_for_new_keys
 DATA = "balancer"
 FLAGS = "balancer_flags"
 # Configuration values, shown under Diagnostic when read-only
-DIAGNOSTIC_KEYS = {"cell_count", "cell_count_detected", "balance_trigger_voltage", "max_balance_current"}
+DIAGNOSTIC_KEYS = {"cell_count", "cell_count_detected", "balance_trigger_voltage", "max_balance_current", "alarm_code"}
 
 
 def is_balancer(coordinator):

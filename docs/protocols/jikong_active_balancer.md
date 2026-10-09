@@ -224,7 +224,7 @@ translations linked above; all example checksums were verified.
 ### Communication model
 
 - Master/slave, request-response, the balancer never sends unsolicited data.
-- 9600 baud (framing not stated; 8N1 is assumed).
+- 9600 baud, 8N1 (framing not stated by the vendor; 8N1 works on a real device).
 - Reply within 1 s; the next request only after a reply or the timeout.
 - Requests are 7 bytes, every response is 74 bytes.
 - Multi-byte values are unsigned big-endian unless noted.
@@ -244,7 +244,7 @@ CHK = sum(all preceding bytes, header included) & 0xFF
 | `0xFF` | Read status and cell voltages | `0x0000` | – | See table below |
 | `0xF0` | Set number of cells | cells | 2–24 | Active value at offset 4, rest `00` |
 | `0xF2` | Set balancing trigger delta | mV | 2–1000 | Active value at offset 4, rest `00` |
-| `0xF4` | Set max. balancing current | mA | 30–1000 | Active value at offset 4, rest `00` |
+| `0xF4` | Set max. balancing current | mA | 30–1000 (document), 30–2000 on the 2 A model | Active value at offset 4, rest `00` |
 | `0xF6` | Balancing on/off | 0/1 | 0–1 | Active value at offset 4, rest `00` |
 
 Out-of-range values are ignored and the response carries the currently active
@@ -260,10 +260,10 @@ value.
 | 4 | 2 | u16 | Total voltage | 10 mV |
 | 6 | 2 | u16 | Average cell voltage | mV |
 | 8 | 1 | u8 | Detected cell count | |
-| 9 | 1 | u8 | Highest cell index | |
-| 10 | 1 | u8 | Lowest cell index | |
+| 9 | 1 | u8 | Highest cell index, 0-based | |
+| 10 | 1 | u8 | Lowest cell index, 0-based | |
 | 11 | 1 | u8 | Balancing status: bit 0 charging a cell, bit 1 discharging a cell | |
-| 12 | 1 | u8 | Alarms: bit 0 cell-count setting error, bit 1 wire resistance too high, bit 2 battery overvoltage | |
+| 12 | 1 | u8 | Alarms: bit 0 "cell-count setting error" per the document, but set on a healthy device (meaning unknown); bit 1 wire resistance too high; bit 2 battery overvoltage | |
 | 13 | 2 | u16 | Max. cell voltage difference | mV |
 | 15 | 2 | u16 | Balancing current | mA |
 | 17 | 2 | u16 | Balancing trigger delta | mV |
@@ -271,8 +271,32 @@ value.
 | 21 | 1 | u8 | Balancing switch (0 off, 1 on) | |
 | 22 | 1 | u8 | Configured cell count | |
 | 23 + 2·i | 2 | u16 | Cell voltage i, i = 0…23 | mV |
-| 71 | 2 | s16 | Temperature | °C |
+| 71 | 2 | s16 | Temperature | 0.1 °C (document: °C) |
 | 73 | 1 | u8 | Checksum | |
 
-Example: `55 AA 01 FF 00 00 FF` → `EB 90 01 FF 1E D3 …` (78.91 V, 20 cells,
-22 °C; full frame in the translations).
+Example: `55 AA 01 FF 00 00 FF` → `EB 90 01 FF 1E D3 …` (78.91 V, 20 cells;
+full frame in the translations). The vendor example reads the temperature
+`00 16` as 22 °C; measured devices send 0.1 °C, see below.
+
+### Checked on a real device (2026-10-09)
+
+JK-DZ11-B2A24S, 16 cells, 2 A model, RS485 at 9600 baud, address 1, compared
+with the JK app over BLE at the same time:
+
+| Field | Vendor document | Real device |
+|---|---|---|
+| Wiring | – | First attempt with A/B swapped returned only `55 95 01 FF 01`; after swapping the wires the full 74-byte `EB 90` reply arrived |
+| Highest / lowest cell (offsets 9, 10) | "0x13 = cell 19" | **0-based**: 0 and 15 for cells 1 and 16 |
+| Max. balancing current (offset 19) | range 30–1000 mA | **2000 mA** reported (2 A model) |
+| Temperature (offset 71) | °C | **0.1 °C**: `00 BE` = 190 while the app shows 18.9 °C |
+| Alarm bit 0 (offset 12) | cell-count setting error | **set on a healthy device** (configured = detected = 16, app: "functioning properly"); meaning unknown |
+| Cell connection resistances | not in the RS485 protocol | Only over BLE (JK02 `0x02` frame, offset 80); the app shows the same values as the BLE log above |
+
+Real frame (checksum verified):
+
+```text
+EB 90 01 FF 14 E7 0D 11 10 00 0F 00 01 00 03 00 00 00 05 07 D0 01 10
+0D 12 0D 12 0D 10 0D 12 0D 10 0D 12 0D 10 0D 12 0D 12 0D 10 0D 10 0D 10
+0D 10 0D 10 0D 10 0D 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 BE 3E
+```
