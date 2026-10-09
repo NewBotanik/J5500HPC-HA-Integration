@@ -5,7 +5,7 @@
         "title": "Device type and connection",
         "data": {
           "device_name": "Device name",
-          "bms_type": "Device type (JSD_SOLAR = J5500HPC/J5500HP inverter, JK_BALANCER = JK-DZ11-B2A24S balancer)",
+          "bms_type": "Device type",
           "connection_type": "Connection",
           "battery_port": "Port type",
           "poll_interval": "Poll interval, s (inverter: 10 or more)",
@@ -63,6 +63,16 @@
         "basic": "Basic",
         "protocol": "Protocol (TX/RX frames)",
         "parsing": "Protocol + parsing"
+      }
+    },
+    "bms_type": {
+      "options": {
+        "PACE_LV": "PACE BMS (RS232 / RS485)",
+        "PACE_LV_WIFI": "PACE BMS via WiFi module",
+        "JK_PB": "JK BMS (55AA stream, 115200 baud)",
+        "TDT": "TDT BMS (RS232)",
+        "JSD_SOLAR": "JSD SOLAR inverter J5500HPC/J5500HP (RS232, 2400 baud)",
+        "JK_BALANCER": "JK-DZ11-B2A24S active balancer (RS485, 9600 baud)"
       }
     }
   }

@@ -4,6 +4,12 @@ description:
 
 # Changelog
 
+## [3.3.2] - 2026-10-09
+### Changed
+-   The device type in the setup form is a labelled list (e.g. "JK BMS (55AA stream, 115200 baud)" vs "JK-DZ11-B2A24S active balancer (RS485, 9600 baud)"), so the JK BMS and the JK balancer are no longer picked by mistake.
+
+---------------
+
 ## [3.3.1] - 2026-10-09
 ### Fixed
 -   [JK Balancer] Highest/lowest cell are sent 0-based by the device (a real 16-cell frame gives 0 and 15); they are now shown 1-based.

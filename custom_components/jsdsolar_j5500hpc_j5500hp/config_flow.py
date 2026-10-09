@@ -76,7 +76,12 @@ class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema(
             {
                 vol.Required("device_name", default="Gobel Battery"): str,
-                vol.Required(CONF_BMS_TYPE, default=BMS_TYPES[0]): vol.In(BMS_TYPES),
+                # Labelled list: JK_PB (JK BMS) and JK_BALANCER are easy to mix up by code alone
+                vol.Required(CONF_BMS_TYPE, default=BMS_TYPES[0]): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=BMS_TYPES, translation_key="bms_type", mode=selector.SelectSelectorMode.LIST
+                    )
+                ),
                 vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPES[0]): vol.In(CONNECTION_TYPES),
                 vol.Required(CONF_BATTERY_PORT, default=BATTERY_PORTS[0]): vol.In(BATTERY_PORTS),
                 vol.Optional(CONF_POLL_INTERVAL, default=DEFAULT_POLL_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=1)),

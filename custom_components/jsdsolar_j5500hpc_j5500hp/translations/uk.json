@@ -5,7 +5,7 @@
         "title": "Тип пристрою і підключення",
         "data": {
           "device_name": "Назва пристрою",
-          "bms_type": "Тип пристрою (JSD_SOLAR = інвертор J5500HPC/J5500HP, JK_BALANCER = балансир JK-DZ11-B2A24S)",
+          "bms_type": "Тип пристрою",
           "connection_type": "Підключення",
           "battery_port": "Тип порту",
           "poll_interval": "Інтервал опитування, с (інвертор: 10 або більше)",
@@ -63,6 +63,16 @@
         "basic": "Базовий",
         "protocol": "Протокол (кадри TX/RX)",
         "parsing": "Протокол + парсинг"
+      }
+    },
+    "bms_type": {
+      "options": {
+        "PACE_LV": "PACE BMS (RS232 / RS485)",
+        "PACE_LV_WIFI": "PACE BMS через WiFi-модуль",
+        "JK_PB": "JK BMS (потік 55AA, 115200 бод)",
+        "TDT": "TDT BMS (RS232)",
+        "JSD_SOLAR": "Інвертор JSD SOLAR J5500HPC/J5500HP (RS232, 2400 бод)",
+        "JK_BALANCER": "Активний балансир JK-DZ11-B2A24S (RS485, 9600 бод)"
       }
     }
   }
