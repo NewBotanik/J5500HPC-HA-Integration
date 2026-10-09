@@ -4,6 +4,15 @@ description:
 
 # Changelog
 
+## [3.3.1] - 2026-10-09
+### Fixed
+-   [JK Balancer] Highest/lowest cell are sent 0-based by the device (a real 16-cell frame gives 0 and 15); they are now shown 1-based.
+-   [JK Balancer] Maximum balancing current accepts up to 2000 mA: the 2 A model (JK-DZ11-B2A24S) reports 2000 mA, above the 30–1000 mA range in the vendor document.
+### Added
+-   Node-RED test flows in `docs/node-red/` (V1.3 read with decoding, and a probe for V1.3 / JK02 requests) and a test on a real balancer frame.
+
+---------------
+
 ## [3.3.0] - 2026-10-08
 ### Added
 -   [JK Balancer] New device type `JK_BALANCER` for the JK-DZ11-B2A24S stand-alone active balancer over RS485 (vendor protocol V1.3: 9600 baud, `55 AA` request / 74-byte `EB 90` reply, additive checksum). Reads total and per-cell voltages, average/max/min/delta, highest/lowest cell, balancing state and current, trigger delta, max balancing current, balancing switch, configured and detected cell count, temperature and the three alarm bits.

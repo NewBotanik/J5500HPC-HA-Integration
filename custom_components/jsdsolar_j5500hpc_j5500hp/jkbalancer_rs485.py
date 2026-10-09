@@ -29,7 +29,8 @@ LOG_PARSING = 3
 SETTINGS = {
     'cell_count': (CMD_CELL_COUNT, 2, MAX_CELLS, None, 'mdi:counter'),
     'balance_trigger_voltage': (CMD_TRIGGER_DELTA, 2, 1000, 'mV', 'mdi:scale-balance'),
-    'max_balance_current': (CMD_MAX_BALANCE_CURRENT, 30, 1000, 'mA', 'mdi:current-dc'),
+    # The document says 30–1000 mA; the 2 A model (B2A) reports and accepts 2000 mA
+    'max_balance_current': (CMD_MAX_BALANCE_CURRENT, 30, 2000, 'mA', 'mdi:current-dc'),
 }
 SWITCHES = {'balancing_enabled': CMD_BALANCING_SWITCH}
 
@@ -117,9 +118,9 @@ def parse_status(frame):
         'voltage': round(_u16(frame, 4) * 0.01, 2),
         'cell_voltage_avg': _u16(frame, 6),
         'cell_count_detected': detected,
-        # Cell numbers as sent by the balancer (the vendor example reads 0x13 as "cell 19")
-        'cell_voltage_max_number': frame[9],
-        'cell_voltage_min_number': frame[10],
+        # The balancer sends 0-based cell indices (a real 16-cell frame gives 0 and 15); shown 1-based
+        'cell_voltage_max_number': frame[9] + 1,
+        'cell_voltage_min_number': frame[10] + 1,
         'cell_voltage_delta': _u16(frame, 13),
         'balance_current': _u16(frame, 15),
         'balance_trigger_voltage': _u16(frame, 17),

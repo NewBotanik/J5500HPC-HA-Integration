@@ -83,7 +83,7 @@ data, flags = jk.parse_status(STATUS)
 results.append(check("Total voltage", data['voltage'], 78.91))
 results.append(check("Average cell", data['cell_voltage_avg'], 3945))
 results.append(check("Cells detected / configured", (data['cell_count_detected'], data['cell_count']), (20, 20)))
-results.append(check("Highest / lowest cell", (data['cell_voltage_max_number'], data['cell_voltage_min_number']), (19, 2)))
+results.append(check("Highest / lowest cell, 1-based", (data['cell_voltage_max_number'], data['cell_voltage_min_number']), (20, 3)))
 results.append(check("Delta, trigger, max current", (data['cell_voltage_delta'], data['balance_trigger_voltage'], data['max_balance_current']), (7, 5, 1000)))
 results.append(check("Temperature", data['temperature'], 22))
 results.append(check("Only configured cells exposed", (jk.cell_key(20) in data, jk.cell_key(21) in data), (True, False)))
@@ -96,6 +96,20 @@ negative = bytearray(STATUS)
 negative[71:73] = (-5).to_bytes(2, 'big', signed=True)
 negative[-1] = jk.checksum(negative[:-1])
 results.append(check("Negative temperature (INT16)", jk.parse_status(bytes(negative))[0]['temperature'], -5))
+
+# Real frame from a JK-DZ11-B2A24S (16 cells, 2 A model), captured with Node-RED
+REAL = frame(
+    "eb 90 01 ff 14 e7 0d 11 10 00 0f 00 01 00 03 00 00 00 05 07 d0 01 10 0d 12 0d 12 0d 10 0d 12 0d 10 0d 12"
+    "0d 10 0d 12 0d 12 0d 10 0d 10 0d 10 0d 10 0d 10 0d 10 0d 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
+    "00 be 3e")
+results.append(check("Real frame valid", jk.validate_response(REAL, 1, jk.CMD_READ), None))
+data, flags = jk.parse_status(REAL)
+results.append(check("Real: voltage, cells, avg", (data['voltage'], data['cell_count'], data['cell_voltage_avg']), (53.51, 16, 3345)))
+results.append(check("Real: highest cell 1 (3346 mV), lowest 16 (3344 mV)",
+                     (data['cell_voltage_max_number'], data[jk.cell_key(1)], data['cell_voltage_min_number'], data[jk.cell_key(16)]),
+                     (1, 3346, 16, 3344)))
+results.append(check("Real: max balance current 2000 mA", data['max_balance_current'], 2000))
+results.append(check("Real: 2000 mA within write range", jk.SETTINGS['max_balance_current'][2] >= 2000, True))
 
 # Driver: polling, resync, silence
 comm = FakeComm({jk.CMD_READ: STATUS})
