@@ -1,3 +1,5 @@
+import contextlib
+import datetime
 import logging
 import random
 import re
@@ -270,6 +272,10 @@ SENSORS = {
     # Battery
     'battery_voltage': ('V', 'mdi:car-battery', 'voltage', 'measurement', 1),
     'battery_discharge_current': ('A', 'mdi:battery-arrow-down', 'current', 'measurement', 2),
+    # Derived (derive_battery_currents): + charge, - discharge; raw readings as diagnostics
+    'battery_current': ('A', 'mdi:current-dc', 'current', 'measurement', 2),
+    'battery_current_raw': ('A', 'mdi:current-dc', 'current', 'measurement', 2),
+    'charge_current_raw': ('A', 'mdi:battery-arrow-up', 'current', 'measurement', 1),
     'battery_level': ('%', 'mdi:battery-70', 'battery', 'measurement', 0),
     'setting_battery_cells': ('', 'mdi:battery', None, None, 0),
     'setting_battery_cutoff_voltage': ('V', 'mdi:battery-off', 'voltage', None, 1),
@@ -616,6 +622,53 @@ def parse_gbat(response):
         'setting_battery_cutoff_voltage': _num(t, 3),
         'setting_battery_warning_voltage': _num(t, 4),
     }
+
+
+# Below this the BMS current counts as zero (BMS resolution is 0.01 A)
+BMS_IDLE_CURRENT = 0.05
+# Fast-set keys that derive_battery_currents() reads, and the command each derived key is refreshed from
+DERIVED_CURRENT_SOURCES = {'battery_current': 'GBAT', 'battery_current_raw': 'GBAT',
+                           'battery_discharge_current': 'GBAT', 'charge_current': 'GCHG',
+                           'charge_current_raw': 'GCHG'}
+
+
+def derive_battery_currents(data):
+    """Battery current with a direction, from GBAT/GCHG plus the mode, charge stage and BMS current.
+
+    Measured on a J5500HPC: GBAT field 2 ("discharge current" in the spec) is the battery current
+    in either direction, so while charging it equals the GCHG charge current (38.01 A vs 38.0 A).
+    At rest both read 0.1-0.3 A while the BMS reads 0.00 A: a zero offset of the inverter's
+    current sensor, not a real flow. Direction: the BMS current sign when the BMS link is up,
+    otherwise the charge stage (charger running = charging) and the operating mode (Battery =
+    discharging, any other mode with the charger stopped = idle). The raw readings are kept as
+    battery_current_raw / charge_current_raw.
+    """
+    raw = data.get('battery_discharge_current')
+    charge = data.get('charge_current')
+    stage = data.get('charge_stage')
+    mode = data.get('operating_mode')
+    bms_current = data.get('bms_current')
+    out = {}
+    if raw is not None:
+        out['battery_current_raw'] = raw
+    if charge is not None:
+        out['charge_current_raw'] = charge
+    charger_running = stage is not None and stage != CHARGE_STAGES[0]
+    if charge is not None and stage is not None and not charger_running:
+        out['charge_current'] = 0.0
+    if raw is None:
+        return out
+    if bms_current is not None:
+        direction = 0 if abs(bms_current) < BMS_IDLE_CURRENT else (1 if bms_current > 0 else -1)
+    elif stage is None or mode is None:
+        return out
+    elif charger_running:
+        direction = 1
+    else:
+        direction = -1 if mode == OPERATING_MODES['B'] else 0
+    out['battery_current'] = round(direction * raw, 2)
+    out['battery_discharge_current'] = raw if direction < 0 else 0.0
+    return out
 
 
 def parse_bl(response):
@@ -969,6 +1022,21 @@ FAST_QUERIES = (
 
 IDENTITY_QUERIES = (('I', parse_i), ('SVFW', parse_svfw), ('F', parse_f))
 
+# Raw commands (send_command action): what counts as a query, and what is never sent
+QUERY_COMMANDS = ({c for c, _p, _s in FAST_QUERIES} | {c for c, _p in IDENTITY_QUERIES} | {'GFAIL', 'GCF'})
+QUERY_PATTERN = re.compile(r'GPDAT\d|GPSTS\d[01]|GPID\d|GPPV\d')
+# §10: BA0 (BT0 in the vendor example), B1A/B2A, PA0, PV<nnn.n>, and the ± trims
+CALIBRATION_PATTERN = re.compile(r'(BA0|BT0|B1A|B2A|PA0|PV[\d.]|(BUN|LVR|VDR|OCR|VR|IR|DCR|CHI|LWT|LVA)[+-]).*')
+
+
+def is_query(command):
+    """Read-only command: anything with '?' (setting read-backs, TE?, DATE??????) or a known query."""
+    return '?' in command or command in QUERY_COMMANDS or bool(QUERY_PATTERN.fullmatch(command))
+
+
+def is_calibration(command):
+    return bool(CALIBRATION_PATTERN.fullmatch(command))
+
 # Control commands (§7, §9.3) behind buttons; SPON/SPOFF take the parallel unit number
 ACTIONS = {
     'power_on': 'SON',
@@ -994,12 +1062,21 @@ LOG_BASIC = 1      # cycle summary, identity, writes
 LOG_PROTOCOL = 2   # + every frame sent and received, with response time
 LOG_PARSING = 3    # + parsed values of every command
 
+# The inverter sometimes NAKs or ignores a valid write on the first try: retry before giving up
+WRITE_ATTEMPTS = 5
+WRITE_RETRY_DELAY = 1.0  # s between attempts; polling may use the wire in between
+# Automatic clock sync: allowed drift, and the pause after a sync attempt before the next one
+CLOCK_SYNC_TOLERANCE = 30  # s
+CLOCK_SYNC_MIN_INTERVAL = 3600  # s
+CLOCK_SYNC_WRITE_ATTEMPTS = 2  # fewer than WRITE_ATTEMPTS: this runs inside a poll cycle
+
 
 class JSDSOLAR232:
     """JSD SOLAR inverter driver for the HA coordinator.
 
     Polling only sends queries. Writes happen only through set_setting / set_feature / run_action,
-    which the HA entities call on a user action, and only when allow_writes is set.
+    which the HA entities call on a user action, and only when allow_writes is set. The one exception
+    is the clock sync after a DATE/TIME read-back, and only when auto_clock_sync is set too.
     Calibration commands (§10) are never sent.
     """
 
@@ -1013,12 +1090,16 @@ class JSDSOLAR232:
     SLOW_BACKOFF_ROUNDS = 10
 
     def __init__(self, bms_comm, data_refresh_interval, debug=0, if_random=0, allow_writes=False,
-                 log_depth=LOG_OFF):
+                 log_depth=LOG_OFF, auto_clock_sync=False, clock=None):
         self.bms_comm = bms_comm
         self.log_depth = log_depth
         self.data_refresh_interval = data_refresh_interval
         self.if_random = if_random
         self.allow_writes = allow_writes
+        self.auto_clock_sync = auto_clock_sync
+        # Naive local time to compare the inverter clock with; HA passes its own time zone
+        self.clock = clock or datetime.datetime.now
+        self._last_clock_sync = None
         self.cycle = 0
         self.identity = {}
         self.settings = {}
@@ -1033,6 +1114,11 @@ class JSDSOLAR232:
         self._slow_round = 0
         # One request on the wire at a time: polling and writes run in different executor threads
         self._lock = threading.Lock()
+        self.write_retry_delay = WRITE_RETRY_DELAY
+        # key -> (kind, name) of the read that last produced it, for refresh(); kind: fast/identity/slow
+        self._sources = {}
+        # The read in progress in this thread: polling and refresh() run in different executor threads
+        self._local = threading.local()
         self.logger = logging.getLogger(__name__)
 
     # --- Transport ---------------------------------------------------------------------------
@@ -1081,7 +1167,22 @@ class JSDSOLAR232:
                 self.logger.debug("Parsed %s: %s", command, parsed)
             elif response:
                 self.logger.debug("Parsed %s: nothing usable in %r", command, response)
+        source = getattr(self._local, 'source', None)
+        if parsed and source is not None:
+            data, flags = parsed if isinstance(parsed, tuple) else (parsed, {})
+            for key in (*data, *flags):
+                self._sources[key] = source
         return parsed
+
+    @contextlib.contextmanager
+    def _reading(self, source):
+        """Mark the keys parsed inside the block as coming from `source` (None: do not record)."""
+        previous = getattr(self._local, 'source', None)
+        self._local.source = source
+        try:
+            yield
+        finally:
+            self._local.source = previous
 
     def _sample_response(self, command):
         response = SAMPLE_RESPONSES.get(command)
@@ -1101,7 +1202,8 @@ class JSDSOLAR232:
         """Parsed result of one command, or the cached one while failures are few."""
         if not self._due(command):
             return None
-        parsed = self._parse(command, parser, self.query(command))
+        with self._reading(('fast', command)):
+            parsed = self._parse(command, parser, self.query(command))
         if parsed:
             self._failures[command] = 0
             self._last[command] = parsed
@@ -1118,15 +1220,20 @@ class JSDSOLAR232:
     def update_identity(self):
         """Serial number, firmware and rated data; retried until the inverter answers."""
         for command, parser in IDENTITY_QUERIES:
-            parsed = self._parse(command, parser, self.query(command))
-            if parsed:
-                self.identity.update(parsed)
-                if command == 'F':
-                    self._store_frequency(parsed)
+            self._read_identity(command, parser)
         if self.identity:
             self.logger.info("Inverter identity: %s", self.identity)
         else:
             self.logger.warning("Could not read inverter identity (I/SVFW/F)")
+
+    def _read_identity(self, command, parser):
+        with self._reading(('identity', command)):
+            parsed = self._parse(command, parser, self.query(command))
+        if parsed:
+            self.identity.update(parsed)
+            if command == 'F':
+                self._store_frequency(parsed)
+        return parsed
 
     def _store_frequency(self, parsed):
         # The F<nn> setting is read back through the rated-data query F (§9.5)
@@ -1182,12 +1289,20 @@ class JSDSOLAR232:
         return mode is not None and mode != PARALLEL_MODES[0]
 
     def _build_slow_queue(self):
+        items = self._slow_items()
+        # Queries the firmware never answered are retried once per SLOW_BACKOFF_ROUNDS rounds
+        retry_all = self._slow_round % self.SLOW_BACKOFF_ROUNDS == 0
+        return [item for item in items
+                if retry_all or self._slow_failures.get(item[0], 0) <= self.MAX_FAILURES]
+
+    def _slow_items(self):
+        """Every slow read as (name, read function)."""
         items = [(f"setting:{key}", lambda k=key: self._read_setting(k)) for key in SETTINGS]
         items += [
             ('TE?', self._read_features),
             ('TCQN????', lambda: self._read_into_slow_data('TCQN????', parse_tcqn)),
             ('DATE??????', lambda: self._read_into_slow_data('DATE??????', parse_date)),
-            ('TIME??????', lambda: self._read_into_slow_data('TIME??????', parse_time)),
+            ('TIME??????', self._read_time),
             ('GFAIL', self._read_gfail),
             ('GCF', lambda: self._read_into_slow_data('GCF', parse_gcf)),
         ]
@@ -1202,11 +1317,7 @@ class JSDSOLAR232:
                     f"GPID{u}", lambda r: parse_gpid(u, r))))
             count = max(1, len(self.parallel_units))
             items.append(('GPPV', lambda: self._read_into_slow_data(f"GPPV{count}", parse_gppv)))
-
-        # Queries the firmware never answered are retried once per SLOW_BACKOFF_ROUNDS rounds
-        retry_all = self._slow_round % self.SLOW_BACKOFF_ROUNDS == 0
-        return [item for item in items
-                if retry_all or self._slow_failures.get(item[0], 0) <= self.MAX_FAILURES]
+        return items
 
     def _poll_slow(self):
         for _ in range(self.SLOW_PER_CYCLE):
@@ -1216,7 +1327,9 @@ class JSDSOLAR232:
                 if not self._slow_queue:
                     return
             name, read = self._slow_queue.pop(0)
-            if read():
+            with self._reading(('slow', name)):
+                found = read()
+            if found:
                 self._slow_failures[name] = 0
             else:
                 self._slow_failures[name] = self._slow_failures.get(name, 0) + 1
@@ -1252,12 +1365,129 @@ class JSDSOLAR232:
         if fast_data.get('battery_voltage') is not None:
             self._battery_voltage = fast_data['battery_voltage']
         data = {**self.settings, **self.slow_data, **fast_data, **self.identity}
+        data.update(self._derived_currents(data))
         flags = {**self.slow_flags, **fast_flags}
         data = {k: v for k, v in data.items() if v is not None}
         if self.log_depth >= LOG_BASIC:
             self.logger.info("Cycle %d: %d values, %d flags, %.1f s, slow queue %d left",
                              self.cycle, len(data), len(flags), time.monotonic() - started, len(self._slow_queue))
         return data, flags
+
+    # --- Direct access (HA actions) ----------------------------------------------------------
+
+    def refresh(self, keys):
+        """Re-read now the commands behind `keys`, outside the poll schedule.
+
+        Returns (data, flags, unknown, failed): fresh values to merge into the coordinator data,
+        keys no read has produced yet, and reads that got no usable answer.
+        """
+        sources, unknown = [], []
+        for key in keys:
+            source = self._sources.get(key)
+            if source is None:
+                unknown.append(key)
+            elif source not in sources:
+                sources.append(source)
+        fast_parsers = {c: p for c, p, _s in FAST_QUERIES}
+        identity_parsers = dict(IDENTITY_QUERIES)
+        slow_reads = None
+        data, flags, failed = {}, {}, []
+        fresh_slow = False
+        for kind, name in sources:
+            with self._reading((kind, name)):
+                if kind == 'fast':
+                    parsed = self._parse(name, fast_parsers[name], self.query(name))
+                    if parsed:
+                        self._failures[name] = 0
+                        self._last[name] = parsed
+                        parsed_data, parsed_flags = parsed if isinstance(parsed, tuple) else (parsed, {})
+                        data.update(parsed_data)
+                        flags.update(parsed_flags)
+                elif kind == 'identity':
+                    parsed = self._read_identity(name, identity_parsers[name])
+                    if parsed:
+                        data.update(parsed)
+                else:
+                    if slow_reads is None:
+                        slow_reads = dict(self._slow_items())
+                    read = slow_reads.get(name)
+                    parsed = read() if read else None
+                    fresh_slow = fresh_slow or bool(parsed)
+            if not parsed:
+                failed.append(name)
+        if fresh_slow:
+            # Same precedence as get_data(): fast values win over the stored settings
+            data = {**self.settings, **self.slow_data, **data}
+            flags = {**self.slow_flags, **flags}
+        if ('fast', 'GBAT') in sources or ('fast', 'GCHG') in sources:
+            # Recompute with the latest frames of the other fast commands (mode, charge stage, BMS)
+            view = {}
+            for parsed in self._last.values():
+                view.update(parsed[0] if isinstance(parsed, tuple) else parsed)
+            view.update(data)
+            data.update(self._derived_currents(view))
+        return {k: v for k, v in data.items() if v is not None}, flags, unknown, failed
+
+    def _derived_currents(self, data):
+        derived = derive_battery_currents(data)
+        # refresh() of a derived key re-reads the command it comes from
+        for key in derived:
+            self._sources[key] = ('fast', DERIVED_CURRENT_SOURCES[key])
+        return derived
+
+    def send_command(self, command, attempts=1):
+        """Send one raw command and return the reply (send_command action).
+
+        Queries are always allowed; anything else is a write and needs allow_writes.
+        Calibration (§10) is refused. NAK or silence is retried up to `attempts` times.
+        """
+        command = (command or '').strip()
+        if not command or not command.isprintable():
+            raise ValueError("Command must be non-empty printable text, without CR")
+        if is_calibration(command):
+            raise PermissionError(f"{command}: calibration commands (§10) are never sent")
+        query = is_query(command)
+        if not query and not self.allow_writes:
+            raise PermissionError(f"{command} is not a query: enable inverter control in the integration options")
+        if not query:
+            self.logger.info("Inverter raw write: %s", command)
+        response, attempt, elapsed_ms = None, 0, 0
+        for attempt in range(1, max(1, int(attempts)) + 1):
+            if attempt > 1:
+                time.sleep(self.write_retry_delay)
+            started = time.monotonic()
+            response = self._exchange(command) or None
+            elapsed_ms = round((time.monotonic() - started) * 1000)
+            if response is not None and response != 'NAK':
+                break
+        if response is None:
+            status = 'no_answer'
+        else:
+            status = {'ACK': 'ack', 'NAK': 'nak'}.get(response, 'ok')
+        result = {'command': command, 'response': response, 'status': status,
+                  'attempts': attempt, 'elapsed_ms': elapsed_ms}
+        parser = self._parser_for(command)
+        if parser and status == 'ok':
+            parsed = parser(response)
+            if parsed:
+                parsed_data, parsed_flags = parsed if isinstance(parsed, tuple) else (parsed, {})
+                result['parsed'] = {**parsed_data, **parsed_flags}
+        return result
+
+    @staticmethod
+    def _parser_for(command):
+        """Parser of a known query, for the `parsed` part of a send_command reply."""
+        for fast_command, parser, _split in FAST_QUERIES:
+            if command == fast_command:
+                return parser
+        identity_parsers = dict(IDENTITY_QUERIES)
+        if command in identity_parsers:
+            return identity_parsers[command]
+        for key, setting in SETTINGS.items():
+            if command == setting.read_command:
+                return lambda r, k=key: parse_setting(k, r)
+        return {'TE?': parse_features, 'TCQN????': parse_tcqn, 'DATE??????': parse_date,
+                'TIME??????': parse_time, 'GFAIL': parse_gfail, 'GCF': parse_gcf}.get(command)
 
     # --- Writes (user actions only) ----------------------------------------------------------
 
@@ -1281,19 +1511,28 @@ class JSDSOLAR232:
             return (min(r[0] for r in setting.ranges.values()), max(r[1] for r in setting.ranges.values()))
         return setting.minimum, setting.maximum
 
-    def _write(self, command):
+    def _write(self, command, attempts=WRITE_ATTEMPTS):
         """Send one write command; raises unless the inverter answers ACK."""
         if not self.allow_writes:
             raise PermissionError("Inverter control is disabled in the integration options")
         self.logger.info("Inverter write: %s", command)
         if self.if_random:
             return
-        response = self._exchange(command)
-        if response == 'ACK':
-            return
+        response = None
+        for attempt in range(1, attempts + 1):
+            if attempt > 1:
+                time.sleep(self.write_retry_delay)
+            response = self._exchange(command)
+            if response == 'ACK':
+                if attempt > 1:
+                    self.logger.info("Inverter write %s: ACK on attempt %d", command, attempt)
+                return
+            self.logger.warning("Inverter write %s: %s on attempt %d/%d",
+                                command, response or "no answer", attempt, attempts)
         if response == 'NAK':
-            raise ValueError(f"Inverter rejected {command} (NAK): out of range or not allowed in the current mode")
-        raise TimeoutError(f"No answer from inverter to {command}")
+            raise ValueError(f"Inverter rejected {command} (NAK) {attempts} times: "
+                             "out of range or not allowed in the current mode")
+        raise TimeoutError(f"No answer from inverter to {command} after {attempts} attempts")
 
     def set_setting(self, key, value):
         """Write one §9 setting and return the value read back from the inverter."""
@@ -1306,16 +1545,64 @@ class JSDSOLAR232:
             parameter = setting.format(code)
         else:
             low, high = self.setting_range(key)
-            number = setting.cast(value)
+            # Slider values can carry float noise (52.00000000001); compare at the wire precision
+            number = round(setting.cast(value), setting.precision) if setting.cast is float else setting.cast(value)
             if (low is not None and number < low) or (high is not None and number > high):
                 raise ValueError(f"{key}: {value} is outside {low}–{high}")
             parameter = setting.format(number)
-        self._write(f"{setting.cmd}{parameter}")
+        target = setting.options[code] if setting.options else number
+        try:
+            self._write(f"{setting.cmd}{parameter}")
+        except (ValueError, TimeoutError):
+            # The setting may already hold the target (lost ACK, or a NAK for an unchanged value)
+            if not self.if_random and self._read_setting(key) and self.settings.get(key) == target:
+                self.logger.info("Inverter write %s%s failed, but %s already reads %s",
+                                 setting.cmd, parameter, key, target)
+                return target
+            raise
         if self.if_random:
-            self.settings[key] = setting.options[code] if setting.options else number
+            self.settings[key] = target
         else:
             self._read_setting(key)
         return self.settings.get(key)
+
+    def _sync_clock(self, now, attempts=WRITE_ATTEMPTS):
+        """Set inverter date and time to `now`, then read both back."""
+        self._write(now.strftime('DATE%y%m%d'), attempts)
+        self._write(now.strftime('TIME%H%M%S'), attempts)
+        # Not recorded as a source: this may run inside the TIME slow read
+        with self._reading(None):
+            self._read_into_slow_data('DATE??????', parse_date)
+            self._read_into_slow_data('TIME??????', parse_time)
+
+    def _read_time(self):
+        """Slow-queue TIME read; with auto sync on, compare date + time with HA and fix a drift."""
+        found = self._read_into_slow_data('TIME??????', parse_time)
+        if found and self.auto_clock_sync and self.allow_writes and not self.if_random:
+            self._check_clock()
+        return found
+
+    def _check_clock(self):
+        now = self.clock()
+        try:
+            inverter_now = datetime.datetime.strptime(
+                f"{self.slow_data.get('inverter_date')} {self.slow_data.get('inverter_time')}", "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return
+        drift = (inverter_now - now).total_seconds()
+        if abs(drift) <= CLOCK_SYNC_TOLERANCE:
+            return
+        started = time.monotonic()
+        if self._last_clock_sync is not None and started - self._last_clock_sync < CLOCK_SYNC_MIN_INTERVAL:
+            return
+        self._last_clock_sync = started
+        self.logger.info("Inverter clock %s differs from %s by %.0f s, syncing",
+                         inverter_now, now.replace(microsecond=0), drift)
+        try:
+            # DATE was read earlier in the queue: take a fresh time for the write
+            self._sync_clock(self.clock(), CLOCK_SYNC_WRITE_ATTEMPTS)
+        except (ValueError, TimeoutError) as err:
+            self.logger.warning("Inverter clock sync failed: %s", err)
 
     def set_feature(self, key, enabled):
         """Enable (TE) or disable (TD) one feature flag and return the state read back."""
@@ -1330,10 +1617,7 @@ class JSDSOLAR232:
     def run_action(self, action, unit=None, now=None):
         """Control command behind a button: SON/SOFF/Q/ED1, SPON/SPOFF<n>, or clock sync."""
         if action == 'sync_clock':
-            self._write(now.strftime('DATE%y%m%d'))
-            self._write(now.strftime('TIME%H%M%S'))
-            self._read_into_slow_data('DATE??????', parse_date)
-            self._read_into_slow_data('TIME??????', parse_time)
+            self._sync_clock(now)
         elif unit is not None:
             self._write(f"{PARALLEL_ACTIONS[action]}{unit}")
         else:

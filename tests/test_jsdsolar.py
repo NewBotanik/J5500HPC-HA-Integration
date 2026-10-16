@@ -186,6 +186,7 @@ results.append(raises("Action refused without option", PermissionError, locked.r
 comm = FakeComm({**jsd.SAMPLE_RESPONSES, 'OPR01': 'ACK', 'TCCV56.0': 'ACK', 'TEO': 'ACK', 'SOFF': 'ACK',
                  'SPON2': 'ACK', 'DATE251203': 'ACK', 'TIME051203': 'ACK', 'CST01': 'NAK'})
 inverter = jsd.JSDSOLAR232(bms_comm=comm, data_refresh_interval=5, allow_writes=True)
+inverter.write_retry_delay = 0
 inverter.get_data()
 comm.responses['OPR??'] = '(01'
 results.append(check("Select write + read-back", inverter.set_setting('setting_output_priority', 'PV first'), 'PV first'))
@@ -199,6 +200,35 @@ results.append(raises("Grid current out of range", ValueError, inverter.set_sett
 results.append(check("Out-of-range values not sent", 'TCCV70.0' in comm.sent or 'GCC200' in comm.sent, False))
 results.append(raises("Unknown option", ValueError, inverter.set_setting, 'setting_output_priority', 'Nonsense'))
 results.append(raises("NAK raises", ValueError, inverter.set_setting, 'setting_charge_mode', 'Forced 2-stage'))
+results.append(check("NAK retried", comm.sent.count('CST01'), jsd.WRITE_ATTEMPTS))
+
+
+class FlakyComm(FakeComm):
+    """NAKs the first `naks` sends of each write command, then answers from the dict."""
+
+    def __init__(self, responses, naks):
+        super().__init__(responses)
+        self.naks = naks
+
+    def send_data(self, data):
+        super().send_data(data)
+        command = data.rstrip('\r')
+        if self.responses.get(command) == 'ACK' and self.sent.count(command) <= self.naks:
+            self._pending = 'NAK'
+        return True
+
+
+flaky = FlakyComm({**jsd.SAMPLE_RESPONSES, 'CPR03': 'ACK', 'CPR??': '(03', 'GCC030': 'ACK', 'GCC???': '(030'}, naks=2)
+retrying = jsd.JSDSOLAR232(bms_comm=flaky, data_refresh_interval=5, allow_writes=True)
+retrying.write_retry_delay = 0
+results.append(check("Write ACKed after 2 NAKs", retrying.set_setting('setting_charger_priority', 'PV only'), 'PV only'))
+results.append(check("Write sent 3 times", flaky.sent.count('CPR03'), 3))
+results.append(check("Number ACKed after 2 NAKs", retrying.set_setting('setting_max_grid_charge_current', 30), 30))
+stuck = FakeComm({**jsd.SAMPLE_RESPONSES, 'OPR02': 'NAK', 'OPR??': '(02'})
+already = jsd.JSDSOLAR232(bms_comm=stuck, data_refresh_interval=5, allow_writes=True)
+already.write_retry_delay = 0
+results.append(check("NAK but read-back matches", already.set_setting('setting_output_priority', 'PV-Battery-Grid'),
+                     'PV-Battery-Grid'))
 comm.responses['TE?'] = '(ACDEHJOX'
 results.append(check("Feature on + read-back", inverter.set_feature('feature_buzzer_mute', True), True))
 results.append(check("Feature command", 'TEO' in comm.sent, True))
@@ -208,6 +238,102 @@ inverter.run_action('sync_clock', now=datetime.datetime(2025, 12, 3, 5, 12, 3))
 results.append(check("Control commands", [c for c in ('SOFF', 'SPON2', 'DATE251203', 'TIME051203') if c in comm.sent],
                      ['SOFF', 'SPON2', 'DATE251203', 'TIME051203']))
 results.append(raises("Silent write raises", TimeoutError, inverter.run_action, 'reset_energy_counters'))
+
+# Automatic clock sync after the TIME read-back (SAMPLE_RESPONSES: 2025-12-03 05:12:03)
+def clock_run(now, auto=True, writes=True):
+    comm = FakeComm({**jsd.SAMPLE_RESPONSES, now.strftime('DATE%y%m%d'): 'ACK', now.strftime('TIME%H%M%S'): 'ACK'})
+    inverter = jsd.JSDSOLAR232(bms_comm=comm, data_refresh_interval=5, allow_writes=writes,
+                               auto_clock_sync=auto, clock=lambda: now)
+    inverter.write_retry_delay = 0
+    inverter.slow_data['inverter_date'] = '2025-12-03'
+    inverter._read_time()
+    return [c for c in comm.sent if c[:4] in ('DATE', 'TIME') and '?' not in c]
+
+
+drifted = datetime.datetime(2025, 12, 3, 5, 20, 0)
+results.append(check("Clock drift synced", clock_run(drifted), ['DATE251203', 'TIME052000']))
+results.append(check("Clock within tolerance not synced", clock_run(datetime.datetime(2025, 12, 3, 5, 12, 20)), []))
+results.append(check("Wrong date synced", clock_run(datetime.datetime(2025, 12, 4, 5, 12, 3)), ['DATE251204', 'TIME051203']))
+results.append(check("Clock sync off: no writes", clock_run(drifted, auto=False), []))
+results.append(check("Clock sync without control: no writes", clock_run(drifted, writes=False), []))
+comm = FakeComm({**jsd.SAMPLE_RESPONSES, 'DATE251203': 'ACK', 'TIME052000': 'ACK'})
+repeat = jsd.JSDSOLAR232(bms_comm=comm, data_refresh_interval=5, allow_writes=True,
+                         auto_clock_sync=True, clock=lambda: drifted)
+repeat.slow_data['inverter_date'] = '2025-12-03'
+repeat._read_time()
+repeat._read_time()
+results.append(check("Clock sync at most once per interval", comm.sent.count('TIME052000'), 1))
+
+
+# Battery current direction (values from a real J5500HPC: charging and at rest in Line mode)
+derive = jsd.derive_battery_currents
+charging = derive({'battery_discharge_current': 38.01, 'charge_current': 38.0, 'charge_stage': 'Constant current',
+                   'operating_mode': 'Line', 'bms_current': 39.1})
+results.append(check("Charging: no discharge current", charging['battery_discharge_current'], 0.0))
+results.append(check("Charging: battery current positive", charging['battery_current'], 38.01))
+results.append(check("Charging: charge current kept", 'charge_current' in charging, False))
+idle = derive({'battery_discharge_current': 0.23, 'charge_current': 0.2, 'charge_stage': 'Stopped',
+               'operating_mode': 'Line', 'bms_current': 0.0})
+results.append(check("Idle: sensor offset zeroed",
+                     (idle['battery_current'], idle['battery_discharge_current'], idle['charge_current']), (0.0, 0.0, 0.0)))
+results.append(check("Idle: raw readings kept", (idle['battery_current_raw'], idle['charge_current_raw']), (0.23, 0.2)))
+on_battery = derive({'battery_discharge_current': 20.5, 'charge_current': 0.1, 'charge_stage': 'Stopped',
+                     'operating_mode': 'Battery'})
+results.append(check("Battery mode without BMS: discharging",
+                     (on_battery['battery_current'], on_battery['battery_discharge_current']), (-20.5, 20.5)))
+pv_short = derive({'battery_discharge_current': 5.0, 'charge_current': 10.0, 'charge_stage': 'Constant current',
+                   'operating_mode': 'Battery', 'bms_current': -5.0})
+results.append(check("BMS sign wins over the charge stage", pv_short['battery_current'], -5.0))
+results.append(check("No mode or stage: value left as read", derive({'battery_discharge_current': 3.0}),
+                     {'battery_current_raw': 3.0}))
+sample = jsd.JSDSOLAR232(bms_comm=FakeComm(jsd.SAMPLE_RESPONSES), data_refresh_interval=5)
+sample_data, _flags = sample.get_data()
+results.append(check("get_data adds battery current", 'battery_current' in sample_data, True))
+results.append(check("Derived key refreshable", sample._sources.get('battery_current'), ('fast', 'GBAT')))
+
+# Raw commands (send_command action)
+results.append(check("Query classification", [jsd.is_query(c) for c in ('GBAT', 'CPR??', 'TE?', 'GPDAT2', 'GCC030', 'CPR03', 'SOFF')],
+                     [True, True, True, True, False, False, False]))
+results.append(check("Calibration classification",
+                     [jsd.is_calibration(c) for c in ('BA0', 'B1A52.0', 'PV150.0', 'VR+.2', 'LVA-05', 'GPV', 'VR???', 'V220', 'I')],
+                     [True, True, True, True, True, False, False, False, False]))
+comm = FakeComm({**jsd.SAMPLE_RESPONSES, 'CPR03': 'ACK', 'BTB??': 'NAK'})
+raw = jsd.JSDSOLAR232(bms_comm=comm, data_refresh_interval=5, allow_writes=False)
+raw.write_retry_delay = 0
+reply = raw.send_command('GBAT')
+results.append(check("Raw query reply", (reply['status'], reply['response'], 'battery_voltage' in reply.get('parsed', {})),
+                     ('ok', jsd.SAMPLE_RESPONSES['GBAT'], True)))
+results.append(raises("Raw write refused without control", PermissionError, raw.send_command, 'CPR03'))
+results.append(check("Refused raw write not sent", 'CPR03' in comm.sent, False))
+raw.allow_writes = True
+results.append(check("Raw write ACK", raw.send_command('CPR03')['status'], 'ack'))
+results.append(raises("Calibration refused even with control", PermissionError, raw.send_command, 'BA0'))
+results.append(check("Calibration not sent", 'BA0' in comm.sent, False))
+reply = raw.send_command('BTB??', attempts=3)
+results.append(check("Raw NAK retried", (reply['status'], reply['attempts'], comm.sent.count('BTB??')), ('nak', 3, 3)))
+results.append(check("Raw silence", raw.send_command('XYZ?')['status'], 'no_answer'))
+results.append(raises("Empty command refused", ValueError, raw.send_command, '  '))
+
+# Refresh: re-read only the command behind a key
+comm = FakeComm({**jsd.SAMPLE_RESPONSES, 'CPR??': '(01'})
+fresh = jsd.JSDSOLAR232(bms_comm=comm, data_refresh_interval=5)
+for _ in range(40):
+    fresh.get_data()
+comm.sent.clear()
+comm.responses['GBAT'] = '(055.5 031.50 16 42.0 44.0'
+data, flags, unknown, failed = fresh.refresh(['battery_voltage'])
+results.append(check("Refresh fast key sends only its command", comm.sent, ['GBAT']))
+results.append(check("Refresh fast key value", data.get('battery_voltage'), 55.5))
+comm.sent.clear()
+comm.responses['CPR??'] = '(03'
+data, flags, unknown, failed = fresh.refresh(['setting_charger_priority', 'serial_number', 'nonexistent_key'])
+results.append(check("Refresh setting + identity commands", comm.sent, ['CPR??', 'I']))
+results.append(check("Refresh setting value", data.get('setting_charger_priority'), 'PV only'))
+results.append(check("Refresh unknown key", (unknown, failed), (['nonexistent_key'], [])))
+comm.sent.clear()
+data, flags, unknown, failed = fresh.refresh(['feature_buzzer_mute'])
+results.append(check("Refresh flag", (comm.sent, 'feature_buzzer_mute' in flags), (['TE?'], True)))
+
 results.append(check("Calibration never sent", [c for c in comm.sent if c[:3] in ('BA0', 'B1A', 'B2A', 'PA0')], []))
 
 # Debug log depth: each level adds its own records, off writes none of them

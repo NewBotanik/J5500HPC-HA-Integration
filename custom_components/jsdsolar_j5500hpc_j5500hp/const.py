@@ -14,8 +14,14 @@ CONF_JK_DISPLAY_INDEX_START = "jk_display_index_start"
 CONF_MAX_PARALLEL = "max_parallel_allowed"
 # Options flow: allow JSD SOLAR settings/control writes (off by default)
 CONF_JSD_ENABLE_CONTROL = "jsd_enable_control"
+# Options flow: sync the inverter clock to HA when the read-back differs (needs control on)
+CONF_JSD_AUTO_CLOCK_SYNC = "jsd_auto_clock_sync"
 # Options flow, JK balancer: RS485 slave address and settings writes (off by default)
 CONF_JK_BALANCER_ADDRESS = "jk_balancer_address"
+# Options flow, PACE only: raw current units per ampere (100 = 0.01 A, 10 = 0.1 A BMS)
+CONF_PACE_CURRENT_SCALE = "pace_current_scale"
+PACE_CURRENT_SCALES = ["100", "10"]
+DEFAULT_PACE_CURRENT_SCALE = "100"
 CONF_JK_BALANCER_ENABLE_CONTROL = "jk_balancer_enable_control"
 # Options flow: debug logging of this entry and how deep it goes
 CONF_DEBUG_LOGGING = "debug_logging"

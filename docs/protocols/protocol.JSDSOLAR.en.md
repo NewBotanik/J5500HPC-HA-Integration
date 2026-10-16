@@ -449,7 +449,7 @@ This reads as 220 V, 50 Hz, loss thresholds 264/154 V, return thresholds 255/163
 | # | Field | Meaning | Unit |
 |---|---|---|---|
 | 1 | `AAA.A` | Battery voltage | V |
-| 2 | `BBB.BB` | Battery discharge current | A |
+| 2 | `BBB.BB` | Battery discharge current (measured: battery current in either direction, see §14 #21) | A |
 | 3 | `CC` | Configured number of battery cells | |
 | 4 | `DD.D` | Configured discharge cut-off voltage | V |
 | 5 | `EE.E` | Configured discharge warning voltage | V |
@@ -1573,6 +1573,7 @@ These are errors and contradictions found in the original. Handle them defensive
 | 18 | `GCF` | The `P1` group has 17 bits; the other groups have 16. | Parse by tag, not by length |
 | 19 | `F` | The cell-count field is described as "×120", with two different formats. | Parse as a float |
 | 20 | Command table | Counts per category ("24 queries", "40 settings") do not match the sections exactly. `CFG` appears under both Settings and Queries. | — |
+| 21 | `GBAT` | Field 2 is called "discharge current", but on a J5500HPC it is the battery current in either direction, unsigned: while charging it equals the `GCHG` charge current (38.01 A vs 38.0 A). At rest it and the `GCHG` charge current read 0.1–0.3 A while the BMS (`GBMS`) reads 0.00 A: a zero offset of the inverter's current sensor. | Take the direction from the BMS current sign, or from the charge stage and the operating mode; treat the reading at rest as zero |
 
 ---
 

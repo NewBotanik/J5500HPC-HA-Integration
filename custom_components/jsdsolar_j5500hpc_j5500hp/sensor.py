@@ -457,6 +457,8 @@ class GobelBatteryTemperatureSensor(CoordinatorEntity, SensorEntity):
 INVERTER_DIAGNOSTIC_KEYS = {
     "serial_number", "firmware_version", "firmware_date", "dsp_firmware_version",
     "rated_voltage", "rated_current", "rated_frequency", "inverter_date", "inverter_time",
+    # Uncorrected GBAT/GCHG currents, see jsdsolar_rs232.derive_battery_currents
+    "battery_current_raw", "charge_current_raw",
 }
 INVERTER_DIAGNOSTIC_PREFIXES = ("setting_", "last_fault", "fault_bits_")
 

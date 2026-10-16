@@ -354,6 +354,9 @@ class JKBMS485:
         if 162 <= len(data):
             raw_c = struct.unpack_from('<i', data, 158)[0]
             result['current_a'] = raw_c / 1000.0  # mA → A
+            # Power is unsigned in the frame: take the sign of the current (Add-on 5f71a60)
+            if 'power_kw' in result and raw_c < 0:
+                result['power_kw'] = -result['power_kw']
 
         # ---- Battery temp sensors: int16le at 162, 164, 254, 256, 258 (/10 = °C) ----
         temps = {

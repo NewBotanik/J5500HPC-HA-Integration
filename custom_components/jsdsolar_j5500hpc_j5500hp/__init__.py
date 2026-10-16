@@ -8,6 +8,7 @@ import homeassistant.helpers.config_validation as cv
 from .const import DOMAIN
 from .jsdsolar_rs232 import LOG_BASIC, LOG_PROTOCOL
 from .coordinator import GobelBatteryUpdateCoordinator
+from . import services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 async def async_setup(hass: HomeAssistant, config: dict):
     """Set up the JSDSolar J5500HPC/J5500HP component from YAML."""
     hass.data.setdefault(DOMAIN, {})
+    services.async_register(hass)
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):

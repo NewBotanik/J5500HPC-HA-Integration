@@ -34,7 +34,6 @@ async def async_setup_entry(
 class JSDSolarSettingNumber(JSDSolarEntity, NumberEntity):
     """One numeric setting; the value shown is always the one read back from the inverter."""
 
-    _attr_mode = NumberMode.BOX
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator, key):
@@ -42,6 +41,8 @@ class JSDSolarSettingNumber(JSDSolarEntity, NumberEntity):
         self._setting = SETTINGS[key]
         self._attr_native_unit_of_measurement = self._setting.unit or None
         self._attr_native_step = 0.1 if self._setting.cast is float else 1
+        # Battery voltages have a narrow range per 12/24/48 V system: a slider in 0.1 V steps
+        self._attr_mode = NumberMode.SLIDER if self._setting.ranges else NumberMode.BOX
         self._attr_icon = self._setting.icon
         if self._setting.device_class:
             self._attr_device_class = NumberDeviceClass(self._setting.device_class)
@@ -50,12 +51,15 @@ class JSDSolarSettingNumber(JSDSolarEntity, NumberEntity):
     def native_min_value(self):
         # Battery-voltage limits follow the detected 12/24/48 V system
         low, _high = self.coordinator.bms.setting_range(self.key)
-        return low if low is not None else 0
+        low = low if low is not None else 0
+        # Widen to the read-back value, so an out-of-range value (e.g. BTB 54.4 on 48 V) still shows
+        return min(low, self._value) if isinstance(self._value, (int, float)) else low
 
     @property
     def native_max_value(self):
         _low, high = self.coordinator.bms.setting_range(self.key)
-        return high if high is not None else 99999
+        high = high if high is not None else 99999
+        return max(high, self._value) if isinstance(self._value, (int, float)) else high
 
     @property
     def native_value(self):

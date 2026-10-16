@@ -6,6 +6,7 @@ import async_timeout
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -20,6 +21,7 @@ from .const import (
     CONF_JK_DISPLAY_INDEX_START,
     CONF_MAX_PARALLEL,
     CONF_JSD_ENABLE_CONTROL,
+    CONF_JSD_AUTO_CLOCK_SYNC,
     CONF_DEBUG_LOGGING,
     CONF_LOG_DEPTH,
     DEFAULT_LOG_DEPTH,
@@ -35,6 +37,8 @@ from .const import (
     CONF_JK_BALANCER_ADDRESS,
     CONF_JK_BALANCER_ENABLE_CONTROL,
     DEFAULT_JK_BALANCER_ADDRESS,
+    CONF_PACE_CURRENT_SCALE,
+    DEFAULT_PACE_CURRENT_SCALE,
 )
 
 from .bms_comm import BMSCommunication
@@ -85,8 +89,10 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
         self.max_parallel = entry.data.get(CONF_MAX_PARALLEL, 16)
         self.jk_display_index_start = entry.data.get(CONF_JK_DISPLAY_INDEX_START, "01")
         self.jsd_control = entry.options.get(CONF_JSD_ENABLE_CONTROL, False)
+        self.jsd_auto_clock_sync = entry.options.get(CONF_JSD_AUTO_CLOCK_SYNC, False)
         self.jk_balancer_control = entry.options.get(CONF_JK_BALANCER_ENABLE_CONTROL, False)
         self.jk_balancer_address = int(entry.options.get(CONF_JK_BALANCER_ADDRESS, DEFAULT_JK_BALANCER_ADDRESS))
+        self.pace_current_scale = int(entry.options.get(CONF_PACE_CURRENT_SCALE, DEFAULT_PACE_CURRENT_SCALE))
         
         # Options (Configure) override the poll interval chosen at setup
         poll_interval = int(entry.options.get(CONF_POLL_INTERVAL, entry.data.get(CONF_POLL_INTERVAL, 5)))
@@ -136,7 +142,8 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                     bms_type=self.bms_type,
                     data_refresh_interval=self.update_interval.total_seconds(),
                     debug=0,
-                    if_random=0
+                    if_random=0,
+                    current_scale=self.pace_current_scale
                 )
             elif self.battery_port == "rs485":
                 self.bms = PACEBMS485(
@@ -144,7 +151,8 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                     ha_comm=self.dummy_ha,
                     data_refresh_interval=self.update_interval.total_seconds(),
                     debug=0,
-                    if_random=0
+                    if_random=0,
+                    current_scale=self.pace_current_scale
                 )
         elif self.bms_type == BMS_TYPE_PACE_LV_WIFI:
             self.bms = PACEBMSWIFI(
@@ -153,7 +161,8 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                 bms_type=self.bms_type,
                 data_refresh_interval=self.update_interval.total_seconds(),
                 debug=0,
-                if_random=0
+                if_random=0,
+                current_scale=self.pace_current_scale
             )
         elif self.bms_type == BMS_TYPE_JK_PB:
             jk_pack_index_start = 0 if self.jk_display_index_start in ["0", "00"] else 1
@@ -182,7 +191,10 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                 debug=0,
                 if_random=0,
                 allow_writes=self.jsd_control,
-                log_depth=self.log_depth
+                log_depth=self.log_depth,
+                auto_clock_sync=self.jsd_auto_clock_sync,
+                # HA time zone, not the system one of the container
+                clock=lambda: dt_util.now().replace(tzinfo=None)
             )
         elif self.bms_type == BMS_TYPE_JK_BALANCER:
             self.bms = JKBalancer485(
@@ -345,6 +357,23 @@ class GobelBatteryUpdateCoordinator(DataUpdateCoordinator):
                 return data
             except Exception as err:
                 raise UpdateFailed(f"BMS communication error: {err}") from err
+
+    async def async_refresh_keys(self, keys):
+        """JSD SOLAR: re-read the commands behind these inverter keys now and push the values to entities.
+
+        Returns {key: value} for the requested keys; raises ValueError for keys no read has produced.
+        """
+        data, flags, unknown, failed = await self.hass.async_add_executor_job(self.bms.refresh, list(keys))
+        if self.data is not None and (data or flags):
+            self.data.setdefault("inverter", {}).update(data)
+            self.data.setdefault("inverter_flags", {}).update(flags)
+            self.async_update_listeners()
+        if failed:
+            _LOGGER.warning("Refresh of %s: no usable answer to %s", ", ".join(keys), ", ".join(failed))
+        if unknown:
+            raise ValueError(f"Not read from the inverter yet, cannot refresh: {', '.join(unknown)}")
+        values = {**data, **flags}
+        return {key: values.get(key) for key in keys}
 
     def shutdown(self):
         """Release bms sockets and threads."""

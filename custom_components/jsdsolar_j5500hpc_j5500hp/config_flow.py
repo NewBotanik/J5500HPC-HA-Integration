@@ -20,6 +20,7 @@ from .const import (
     CONF_JK_DISPLAY_INDEX_START,
     CONF_MAX_PARALLEL,
     CONF_JSD_ENABLE_CONTROL,
+    CONF_JSD_AUTO_CLOCK_SYNC,
     CONF_DEBUG_LOGGING,
     CONF_LOG_DEPTH,
     LOG_DEPTHS,
@@ -27,6 +28,11 @@ from .const import (
     BMS_TYPES,
     BMS_TYPE_JSD_SOLAR,
     BMS_TYPE_JK_BALANCER,
+    BMS_TYPE_PACE_LV,
+    BMS_TYPE_PACE_LV_WIFI,
+    CONF_PACE_CURRENT_SCALE,
+    PACE_CURRENT_SCALES,
+    DEFAULT_PACE_CURRENT_SCALE,
     CONNECTION_TYPES,
     BATTERY_PORTS,
     DEFAULT_POLL_INTERVAL,
@@ -43,6 +49,13 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Device type -> (default device name, default poll interval in s); BMS types use "Gobel Battery", 5 s
+DEVICE_DEFAULTS = {
+    # One inverter cycle takes about 5 s at 2400 baud
+    BMS_TYPE_JSD_SOLAR: ("J5500HPC", 10),
+    BMS_TYPE_JK_BALANCER: ("JK Balancer", DEFAULT_POLL_INTERVAL),
+}
 
 
 def _default_baud(bms_type):
@@ -64,35 +77,47 @@ class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return GobelBatteryOptionsFlow(config_entry)
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial setup step."""
-        errors = {}
+        """First step: device type and connection; the next step asks only what that type needs."""
         if user_input is not None:
             self.config_data = user_input
-            if user_input[CONF_CONNECTION_TYPE] in ["ethernet", "wifi"]:
-                return await self.async_step_network()
-            else:
-                return await self.async_step_serial()
+            return await self.async_step_device()
 
         data_schema = vol.Schema(
             {
-                vol.Required("device_name", default="Gobel Battery"): str,
                 # Labelled list: JK_PB (JK BMS) and JK_BALANCER are easy to mix up by code alone
-                vol.Required(CONF_BMS_TYPE, default=BMS_TYPES[0]): selector.SelectSelector(
+                vol.Required(CONF_BMS_TYPE, default=BMS_TYPE_JSD_SOLAR): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=BMS_TYPES, translation_key="bms_type", mode=selector.SelectSelectorMode.LIST
                     )
                 ),
                 vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPES[0]): vol.In(CONNECTION_TYPES),
-                vol.Required(CONF_BATTERY_PORT, default=BATTERY_PORTS[0]): vol.In(BATTERY_PORTS),
-                vol.Optional(CONF_POLL_INTERVAL, default=DEFAULT_POLL_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                vol.Optional(CONF_MAX_PARALLEL, default=DEFAULT_MAX_PARALLEL): vol.All(vol.Coerce(int), vol.Range(min=1)),
-                vol.Optional(CONF_JK_DISPLAY_INDEX_START, default=DEFAULT_JK_DISPLAY_INDEX_START): vol.In(["00", "01"]),
             }
         )
 
-        return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=data_schema)
+
+    async def async_step_device(self, user_input=None):
+        """Device name, poll interval and the type-specific fields (BMS port and pack numbering only for BMS)."""
+        bms_type = self.config_data[CONF_BMS_TYPE]
+        if user_input is not None:
+            self.config_data.update(user_input)
+            if self.config_data[CONF_CONNECTION_TYPE] in ["ethernet", "wifi"]:
+                return await self.async_step_network()
+            return await self.async_step_serial()
+
+        default_name, default_poll = DEVICE_DEFAULTS.get(bms_type, ("Gobel Battery", DEFAULT_POLL_INTERVAL))
+        fields = {
+            vol.Required("device_name", default=default_name): str,
+            vol.Optional(CONF_POLL_INTERVAL, default=default_poll): vol.All(vol.Coerce(int), vol.Range(min=1)),
+        }
+        # The inverter and the balancer have one fixed protocol each: no BMS port, packs or numbering
+        if bms_type not in (BMS_TYPE_JSD_SOLAR, BMS_TYPE_JK_BALANCER):
+            fields.update({
+                vol.Required(CONF_BATTERY_PORT, default=BATTERY_PORTS[0]): vol.In(BATTERY_PORTS),
+                vol.Optional(CONF_MAX_PARALLEL, default=DEFAULT_MAX_PARALLEL): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Optional(CONF_JK_DISPLAY_INDEX_START, default=DEFAULT_JK_DISPLAY_INDEX_START): vol.In(["00", "01"]),
+            })
+        return self.async_show_form(step_id="device", data_schema=vol.Schema(fields))
 
     async def async_step_network(self, user_input=None):
         """Handle network configuration parameters (IP and port)."""
@@ -189,6 +214,9 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Required(
                 CONF_JSD_ENABLE_CONTROL, default=options.get(CONF_JSD_ENABLE_CONTROL, False)
             )] = bool
+            fields[vol.Required(
+                CONF_JSD_AUTO_CLOCK_SYNC, default=options.get(CONF_JSD_AUTO_CLOCK_SYNC, False)
+            )] = bool
         if self._entry.data.get(CONF_BMS_TYPE) == BMS_TYPE_JK_BALANCER:
             fields[vol.Required(
                 CONF_JK_BALANCER_ADDRESS, default=options.get(CONF_JK_BALANCER_ADDRESS, DEFAULT_JK_BALANCER_ADDRESS)
@@ -198,4 +226,13 @@ class GobelBatteryOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Required(
                 CONF_JK_BALANCER_ENABLE_CONTROL, default=options.get(CONF_JK_BALANCER_ENABLE_CONTROL, False)
             )] = bool
+        if self._entry.data.get(CONF_BMS_TYPE) in (BMS_TYPE_PACE_LV, BMS_TYPE_PACE_LV_WIFI):
+            fields[vol.Required(
+                CONF_PACE_CURRENT_SCALE, default=options.get(CONF_PACE_CURRENT_SCALE, DEFAULT_PACE_CURRENT_SCALE)
+            )] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=PACE_CURRENT_SCALES, translation_key="pace_current_scale",
+                    mode=selector.SelectSelectorMode.DROPDOWN
+                )
+            )
         return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))

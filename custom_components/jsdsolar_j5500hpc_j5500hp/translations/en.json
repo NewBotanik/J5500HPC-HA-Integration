@@ -4,12 +4,17 @@
       "user": {
         "title": "Device type and connection",
         "data": {
-          "device_name": "Device name",
           "bms_type": "Device type",
-          "connection_type": "Connection",
-          "battery_port": "Port type",
+          "connection_type": "Connection"
+        }
+      },
+      "device": {
+        "title": "Device",
+        "data": {
+          "device_name": "Device name (prefix of the entity names)",
           "poll_interval": "Poll interval, s (inverter: 10 or more)",
-          "max_parallel_allowed": "Max parallel packs (BMS only)",
+          "battery_port": "BMS port type",
+          "max_parallel_allowed": "Max parallel packs",
           "jk_display_index_start": "JK BMS pack numbering start (JK only)"
         }
       },
@@ -46,13 +51,16 @@
           "debug_logging": "Enable debug logging",
           "log_depth": "Logging depth",
           "jsd_enable_control": "Enable inverter control (change settings)",
+          "jsd_auto_clock_sync": "Sync inverter date and time with Home Assistant when they differ (needs inverter control)",
           "jk_balancer_address": "JK balancer RS485 address",
-          "jk_balancer_enable_control": "Enable balancer control (cell count, trigger, current, on/off)"
+          "jk_balancer_enable_control": "Enable balancer control (cell count, trigger, current, on/off)",
+          "pace_current_scale": "PACE current resolution"
         },
         "data_description": {
           "debug_logging": "Writes to the Home Assistant log (Settings → System → Logs). Turn it off when done: deep levels write a lot.",
           "log_depth": "Basic: cycle summary, identity, writes. Protocol: + every frame sent and received, with response time. Parsing: + parsed values of every command.",
-          "jk_balancer_address": "Slave address set on the balancer, 1 by default."
+          "jk_balancer_address": "Slave address set on the balancer, 1 by default.",
+          "pace_current_scale": "Most PACE BMS report current in 0.01 A. If the current and power look 10 times too small, choose 0.1 A."
         }
       }
     }
@@ -71,9 +79,39 @@
         "PACE_LV_WIFI": "PACE BMS via WiFi module",
         "JK_PB": "JK BMS (55AA stream, 115200 baud)",
         "TDT": "TDT BMS (RS232)",
-        "JSD_SOLAR": "JSD SOLAR inverter J5500HPC/J5500HP (RS232, 2400 baud)",
-        "JK_BALANCER": "JK-DZ11-B2A24S active balancer (RS485, 9600 baud)"
+        "JSD_SOLAR": "JSD SOLAR inverter, RS232 2400 baud (J5500HPC/J5500HP, possibly others)",
+        "JK_BALANCER": "JK active balancer, RS485 9600 baud (JK-B2A24S-RS485, possibly others)"
       }
+    },
+    "pace_current_scale": {
+      "options": {
+        "100": "0.01 A (default)",
+        "10": "0.1 A"
+      }
+    }
+  },
+  "services": {
+    "send_command": {
+      "name": "Send inverter command",
+      "description": "Sends one raw JSD SOLAR command and returns the reply. Queries (GBAT, CPR??, TE? …) always work; any other command is a write and needs inverter control enabled. Calibration commands are refused.",
+      "fields": {
+        "device_id": {
+          "name": "Inverter",
+          "description": "Needed only when more than one JSD SOLAR inverter is set up."
+        },
+        "command": {
+          "name": "Command",
+          "description": "Command without the trailing CR, e.g. GBAT, CPR??, CPR03."
+        },
+        "attempts": {
+          "name": "Attempts",
+          "description": "Resend up to this many times while the inverter answers NAK or nothing."
+        }
+      }
+    },
+    "refresh": {
+      "name": "Refresh inverter entities",
+      "description": "Re-reads now only the commands behind the chosen entities and updates them, without waiting for the poll cycle. Returns the fresh values."
     }
   }
 }

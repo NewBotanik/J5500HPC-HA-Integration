@@ -3,11 +3,13 @@ import logging
 
 class PACEBMS485:
 
-    def __init__(self, bms_comm, ha_comm, data_refresh_interval, debug, if_random):
+    def __init__(self, bms_comm, ha_comm, data_refresh_interval, debug, if_random, current_scale=100):
         self.bms_comm = bms_comm
         self.ha_comm = ha_comm
         self.data_refresh_interval = data_refresh_interval
         self.if_random = if_random
+        # Raw current units per ampere: 100 (0.01 A, default) or 10 (0.1 A BMS)
+        self.current_scale = current_scale if (current_scale and current_scale > 0) else 100
 
         # Configure logging
         logging.basicConfig(level=logging.DEBUG if debug else logging.INFO,
@@ -238,7 +240,7 @@ class PACEBMS485:
 
         # Pack current
         pack_current = fields[offset] + fields[offset + 1]  # Combine two bytes for current
-        pack_current = self.hex_to_signed(pack_current) / 100
+        pack_current = self.hex_to_signed(pack_current) / self.current_scale
 
         offset += 2
         
@@ -607,17 +609,21 @@ class PACEBMS485:
         rtn = response[6:8]
         length = response[8:10]
         lenid = response[10:12]
+        lenid_3 = response[9:12] if len(response) >= 12 else ""
 
-        # Determine the length of DATAINFO
-        if lenid == '02':
-            data_info_length = 2  # 2 characters for address confirmation
+        if rtn != '00':
+            raise ValueError(f"BMS returned error RTN code: {rtn}")
+
+        # Ported from the Add-on 1.9.87: some packs answer CID2 90 with a short ACK
+        if lenid == '00' or lenid_3 == '000':
+            # Short ACK: LENID 00, no DATAINFO; the confirmed address is ADR from the header
+            address_value = int(adr, 16)
+        elif lenid == '02' or lenid_3 == '002':
+            # Echo variant (Table A.10): LENID 02, DATAINFO = 2 hex digits of the address
+            data_info = response[12:14]
+            address_value = int(data_info, 16)
         else:
-            raise ValueError("Invalid LENID value")
-
-        data_info = response[12:14]
-
-        # Convert DATAINFO from hex to integer
-        address_value = int(data_info, 16)
+            raise ValueError(f"Invalid LENID value: {lenid}")
 
         return address_value
     
@@ -861,10 +867,11 @@ class PACEBMS485:
     def check_if_pack_exsit(self, pack_number):
         try:
             pack_num_data = self.get_pack_num_data(pack_number)
-            if int(pack_num_data) == pack_number:
+            if pack_num_data is not None and int(pack_num_data) == pack_number:
                 if_exsit = pack_number
             else:
                 if_exsit = False
+            return if_exsit
 
         except Exception as e:
             self.logger.error(f"An error occurred: {e}")

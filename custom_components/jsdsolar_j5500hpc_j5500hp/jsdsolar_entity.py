@@ -86,6 +86,13 @@ class JSDSolarEntity(CoordinatorEntity):
             return False
         return self.key in (self.coordinator.data or {}).get(self.section, {})
 
+    async def async_update(self) -> None:
+        """homeassistant.update_entity: re-read only the command behind this entity, not a full poll."""
+        try:
+            await self.coordinator.async_refresh_keys([self.key])
+        except ValueError:
+            await self.coordinator.async_request_refresh()
+
     async def _async_write(self, func, *args):
         """Run a driver write in the executor, then show the read-back value without a full poll."""
         try:

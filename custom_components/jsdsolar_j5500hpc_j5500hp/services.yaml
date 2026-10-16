@@ -1,0 +1,25 @@
+send_command:
+  fields:
+    device_id:
+      required: false
+      selector:
+        device:
+          integration: jsdsolar_j5500hpc_j5500hp
+    command:
+      required: true
+      example: "GBAT"
+      selector:
+        text:
+    attempts:
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+
+refresh:
+  target:
+    entity:
+      integration: jsdsolar_j5500hpc_j5500hp

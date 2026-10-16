@@ -4,6 +4,28 @@ description:
 
 # Changelog
 
+[Українська](docs/uk/CHANGELOG.md)
+
+## [3.4.0] - 2026-10-16
+### Added
+-   [JSD SOLAR] Action `send_command`: sends one raw command and returns the reply (status `ok`/`ack`/`nak`/`no_answer`, attempts, response time, parsed values for a known query). Queries always work; other commands are writes and need inverter control; calibration commands are refused; optional resend on NAK or silence (`attempts`, 1–10).
+-   [JSD SOLAR] Action `refresh`: re-reads now only the commands behind the chosen entities, pushes the values to them and returns `{entity_id: value}`. `homeassistant.update_entity` on an inverter entity does the same targeted re-read instead of a full poll.
+-   Minimum Home Assistant version is now 2023.7 (actions with a response).
+-   [PACE BMS] Option "PACE current resolution" under **Configure**: 0.01 A (default, unchanged) or 0.1 A, for BMS whose current and power were shown 10 times too small. Ported from Gobel-Battery-HA-Addon 1.9.87 (`pace_current_scale`).
+-   [JSD SOLAR] Option "Sync inverter date and time with Home Assistant when they differ" (needs inverter control). After each DATE/TIME read-back the inverter clock is compared with HA local time; a drift over 30 s or a wrong date is fixed with DATE/TIME writes, at most once an hour. Off by default: polling sends no writes unless this option is on.
+### Changed
+-   Setup form in two steps: first the device type and connection, then only the fields that type needs. The JSD SOLAR inverter and the JK balancer no longer ask for the BMS port type, max parallel packs or JK pack numbering. Default device name and poll interval follow the type (inverter: "J5500HPC", 10 s; balancer: "JK Balancer", 5 s). The device type list starts at the JSD SOLAR inverter, labelled "(J5500HPC/J5500HP, possibly others)"; the balancer is labelled "(JK-B2A24S-RS485, possibly others)". Existing entries are not affected.
+-   [JSD SOLAR] Battery-voltage settings (CV, float, EQ, second-output cut-off, cut-off, warning, back-to-grid, back-to-battery, over-voltage) are sliders in 0.1 V steps over the range of the detected 12/24/48 V system.
+### Fixed
+-   [JSD SOLAR] A setting read back outside its stated range (e.g. BTB 54.4 V on a 48 V system, range up to 54.0 V) is shown as is: the number range is widened to include it.
+-   [JSD SOLAR] Writes are retried up to 5 times, 1 s apart, when the inverter answers NAK or nothing: it sometimes NAKs a valid change of charger priority, output priority or max grid charge current on the first try, which broke automations. A warning is logged for every failed attempt. If all attempts fail but the setting already reads the requested value, the write counts as done.
+-   [JSD SOLAR] Battery current while charging and at rest. GBAT field 2 ("discharge current" in the vendor document) is the battery current in either direction, so while charging "Battery Discharge Current" showed the charge current (38 A). At rest both it and "Charge Current" showed 0.1–0.3 A while the BMS read 0.00 A: a zero offset of the inverter's current sensor, not a real leak. Now the direction comes from the BMS current sign (or, without a BMS link, from the charge stage and operating mode): "Battery Discharge Current" is 0 unless the battery discharges, "Charge Current" is 0 while the charger is stopped, and the new sensor "Battery Current" is signed (+ charge, − discharge). The uncorrected readings are kept as the diagnostic sensors "Battery Current Raw" and "Charge Current Raw". See protocol §14 #21.
+-   [PACE BMS RS485] Packs that answer the pack-number request (CID2 90) with a short ACK (`LENID 000`, no DATAINFO) are found again; before, only pack 0 was polled and every cycle logged "Invalid LENID value". Ported from Gobel-Battery-HA-Addon 1.9.87.
+-   [JK BMS] Pack power and total power have the sign of the current (negative while discharging); the frame carries power unsigned, so it was always positive. Ported from Gobel-Battery-HA-Addon `dev` (1.9.88).
+-   [JSD SOLAR] Decimal setting values are rounded to 0.1 before the range check, so a value at the range limit with float noise is not rejected.
+
+---------------
+
 ## [3.3.3] - 2026-10-09
 ### Fixed
 -   [JK Balancer] Temperature is sent in 0.1 °C (the device reports 190 while the JK app shows 18.9 °C); it was shown as 189 °C.
