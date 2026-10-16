@@ -17,7 +17,7 @@ Forked from `fancyui/Gobel-Battery-HA-Integration`. The sibling repo `../J5500HP
 - No linter, no HA test harness. Offline driver test (no HA needed): `python tests/test_jsdsolar.py`, `python tests/test_jkbalancer.py`, `python tests/test_bms_addon_ports.py` (PACE/JK fixes ported from the Add-on)
 - Syntax check: `python -m py_compile custom_components/jsdsolar_j5500hpc_j5500hp/*.py`
 - CI: `.github/workflows/hacs.yml` (HACS validation) and `hassfest.yaml`.
-- Version lives in `custom_components/jsdsolar_j5500hpc_j5500hp/manifest.json` (`version`). Every version change needs a `CHANGELOG.md` entry, mirrored in Ukrainian in `docs/uk/CHANGELOG.md`.
+- Version lives in `custom_components/jsdsolar_j5500hpc_j5500hp/manifest.json` (`version`). Every version change needs a `CHANGELOG.md` entry, mirrored in Ukrainian in `docs/uk/CHANGELOG.md` and German in `docs/de/CHANGELOG.md`. README changes are mirrored in `docs/uk/README.md` and `docs/de/README.md`.
 
 ## Architecture
 
@@ -59,7 +59,7 @@ const.py         config keys, BMS_TYPES, defaults
 - **Pack ID**: use the pack id from the ACK data to tell packs apart.
 - **Entity naming**: BMS `"{device_name} Pack NN {metric}"`, unique ID `{entry_id}_pack_{id}_{metric}`; overall `{entry_id}_total_{key}`.
 - **Commit format**: conventional commits: `feat:`, `fix:`, `chore:`, `docs:`.
-- **Version bump**: `manifest.json` `version` + `CHANGELOG.md` entry + the same entry in `docs/uk/CHANGELOG.md`.
+- **Version bump**: `manifest.json` `version` + `CHANGELOG.md` entry + the same entry in `docs/uk/CHANGELOG.md` and `docs/de/CHANGELOG.md`.
 - `translations/*.yaml` at the repo root are leftovers from the Add-on and are not used by the integration.
 
 ## Protocol documentation

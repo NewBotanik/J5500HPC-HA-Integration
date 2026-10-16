@@ -4,7 +4,7 @@ description:
 
 # Changelog
 
-[Українська](docs/uk/CHANGELOG.md)
+[Deutsch](docs/de/CHANGELOG.md) | [Українська](docs/uk/CHANGELOG.md)
 
 ## [3.4.1] - 2026-10-16
 ### Fixed

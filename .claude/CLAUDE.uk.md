@@ -17,7 +17,7 @@
 - Лінтера і тестового оточення HA немає. Офлайн-тест драйвера (HA не потрібен): `python tests/test_jsdsolar.py`, `python tests/test_jkbalancer.py`, `python tests/test_bms_addon_ports.py` (виправлення PACE/JK, перенесені з Add-on)
 - Перевірка синтаксису: `python -m py_compile custom_components/jsdsolar_j5500hpc_j5500hp/*.py`
 - CI: `.github/workflows/hacs.yml` (валідація HACS) і `hassfest.yaml`.
-- Версія записана в `custom_components/jsdsolar_j5500hpc_j5500hp/manifest.json` (`version`). Кожна зміна версії потребує запису в `CHANGELOG.md` і такого самого українською в `docs/uk/CHANGELOG.md`.
+- Версія записана в `custom_components/jsdsolar_j5500hpc_j5500hp/manifest.json` (`version`). Кожна зміна версії потребує запису в `CHANGELOG.md` і такого самого українською в `docs/uk/CHANGELOG.md` та німецькою в `docs/de/CHANGELOG.md`. Зміни README дублюються в `docs/uk/README.md` і `docs/de/README.md`.
 
 ## Архітектура
 
@@ -58,7 +58,7 @@ const.py         ключі конфігурації, BMS_TYPES, значенн�
 - **Pack ID**: використовувати pack id з ACK-даних, щоб розрізняти паки.
 - **Іменування entities**: BMS `"{device_name} Pack NN {metric}"`, unique ID `{entry_id}_pack_{id}_{metric}`; загальні `{entry_id}_total_{key}`.
 - **Формат комітів**: conventional commits: `feat:`, `fix:`, `chore:`, `docs:`.
-- **Зміна версії**: `version` у `manifest.json` + запис у `CHANGELOG.md` + той самий запис у `docs/uk/CHANGELOG.md`.
+- **Зміна версії**: `version` у `manifest.json` + запис у `CHANGELOG.md` + той самий запис у `docs/uk/CHANGELOG.md` і `docs/de/CHANGELOG.md`.
 - `translations/*.yaml` у корені репозиторію залишилися від Add-on; інтеграція їх не використовує.
 
 ## Документація протоколів

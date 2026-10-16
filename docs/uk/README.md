@@ -38,6 +38,7 @@
 
 
 <img src="../../img/J5500HPC.avif" alt="Інвертор JSD SOLAR J5500HPC" width="360">
+<img src="../../img/J5500HPC_02.png" alt="Інвертор JSD SOLAR J5500HPC" width="360">
 
 - **Потрібен кабель RS232-USB або міст RS232-WiFi/Ethernet** (наприклад, ESP8266 з ESPHome `stream_server` або модуль USR/Elfin у режимі прозорого TCP).
 - **Порт підключення**: роз'єм **RS232** DB9 на інверторі: контакт 2 = TX інвертора, контакт 3 = RX інвертора, контакт 5 = GND.

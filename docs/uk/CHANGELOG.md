@@ -4,7 +4,7 @@ description:
 
 # Журнал змін
 
-[English](../../CHANGELOG.md)
+[English](../../CHANGELOG.md) | [Deutsch](../de/CHANGELOG.md)
 
 ## [3.4.1] - 2026-10-16
 ### Виправлено
