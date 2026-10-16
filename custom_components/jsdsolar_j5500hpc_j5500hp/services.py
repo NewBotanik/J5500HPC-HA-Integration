@@ -1,4 +1,6 @@
 """JSD SOLAR actions for automations: raw command with reply, and an immediate re-read of entities."""
+import logging
+
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -9,6 +11,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.service import async_extract_entity_ids
 
 from .const import DOMAIN, BMS_TYPE_JSD_SOLAR
+
+_LOGGER = logging.getLogger(__name__)
 
 SERVICE_SEND_COMMAND = "send_command"
 SERVICE_REFRESH = "refresh"
@@ -41,6 +45,29 @@ def _inverter_for_device(hass, device_id):
     raise HomeAssistantError("The device is not a loaded JSD SOLAR inverter")
 
 
+async def _extract_entity_ids(hass, call):
+    """Entity IDs of the call target (entities, devices, areas)."""
+    try:
+        # HA 2025.x+: async_extract_entity_ids(service_call, expand_group=True), hass taken from the call
+        return await async_extract_entity_ids(call)
+    except TypeError:
+        # Older HA: async_extract_entity_ids(hass, service_call, expand_group=True)
+        return await async_extract_entity_ids(hass, call)
+
+
+def _guarded(handler):
+    """Show unexpected errors with their text in the UI (instead of "Unknown error") and log the traceback."""
+    async def wrapper(hass, call):
+        try:
+            return await handler(hass, call)
+        except HomeAssistantError:
+            raise
+        except Exception as err:
+            _LOGGER.exception("Action %s.%s failed", DOMAIN, call.service)
+            raise HomeAssistantError(f"{type(err).__name__}: {err}") from err
+    return wrapper
+
+
 async def _async_send_command(hass, call: ServiceCall):
     coordinator = _inverter_for_device(hass, call.data.get("device_id"))
     try:
@@ -55,7 +82,7 @@ async def _async_refresh(hass, call: ServiceCall):
     registry = er.async_get(hass)
     # coordinator -> [(entity_id, key)]
     wanted = {}
-    for entity_id in sorted(await async_extract_entity_ids(hass, call)):
+    for entity_id in sorted(await _extract_entity_ids(hass, call)):
         entry = registry.async_get(entity_id)
         coordinator = inverters.get(entry.config_entry_id) if entry else None
         prefix = f"{entry.config_entry_id}_inverter_" if entry else ""
@@ -80,10 +107,10 @@ def async_register(hass: HomeAssistant):
         return
 
     async def send_command(call):
-        return await _async_send_command(hass, call)
+        return await _guarded(_async_send_command)(hass, call)
 
     async def refresh(call):
-        return await _async_refresh(hass, call)
+        return await _guarded(_async_refresh)(hass, call)
 
     hass.services.async_register(DOMAIN, SERVICE_SEND_COMMAND, send_command,
                                  schema=SEND_COMMAND_SCHEMA, supports_response=SupportsResponse.OPTIONAL)

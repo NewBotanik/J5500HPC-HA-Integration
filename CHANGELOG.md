@@ -6,6 +6,13 @@ description:
 
 [Українська](docs/uk/CHANGELOG.md)
 
+## [3.4.1] - 2026-10-16
+### Fixed
+-   [JSD SOLAR] Action `refresh` failed with "Unknown error" on current Home Assistant versions: `async_extract_entity_ids()` no longer takes `hass` (it reads it from the service call). Both signatures are now supported, so the action works from 2023.7 up.
+-   [JSD SOLAR] Unexpected errors in the `send_command` and `refresh` actions are shown with their text instead of "Unknown error", and the traceback goes to the Home Assistant log.
+
+---------------
+
 ## [3.4.0] - 2026-10-16
 ### Added
 -   [JSD SOLAR] Action `send_command`: sends one raw command and returns the reply (status `ok`/`ack`/`nak`/`no_answer`, attempts, response time, parsed values for a known query). Queries always work; other commands are writes and need inverter control; calibration commands are refused; optional resend on NAK or silence (`attempts`, 1–10).
