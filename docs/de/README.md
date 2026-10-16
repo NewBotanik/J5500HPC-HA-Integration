@@ -36,8 +36,7 @@ Sie **benötigt keinen MQTT-Broker**: Geräte und Entitäten werden direkt in Ho
 
 ## Anschlussanleitung für den JSD SOLAR Wechselrichter (z. B. J5500HPC):
 
-<img src="../../img/J5500HPC.avif" alt="JSD SOLAR J5500HPC Wechselrichter" width="360">
-<img src="../../img/J5500HPC_02.png" alt="JSD SOLAR J5500HPC Wechselrichter" width="360">
+<p><img src="../../img/J5500HPC.avif" alt="JSD SOLAR J5500HPC Wechselrichter" width="48%"> <img src="../../img/J5500HPC_02.png" alt="JSD SOLAR J5500HPC Wechselrichter" width="48%"></p>
 
 - **RS232-USB-Kabel oder eine RS232-zu-WiFi/Ethernet-Bridge** (zum Beispiel ein ESP8266 mit ESPHome `stream_server` oder ein USR/Elfin-Modul im transparenten TCP-Modus).
 - **Anschlussport**: der **RS232**-DB9-Port des Wechselrichters: Pin 2 = TX des Wechselrichters, Pin 3 = RX des Wechselrichters, Pin 5 = GND.

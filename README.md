@@ -41,8 +41,7 @@ It **does not need an MQTT broker**: devices and entities are created directly i
 ## JSD SOLAR Inverter (e.g. J5500HPC) Connection Instructions:
 
 
-<img src="img/J5500HPC.avif" alt="JSD SOLAR J5500HPC inverter" width="360">
-<img src="img/J5500HPC_02.png" alt="JSD SOLAR J5500HPC inverter" width="360">
+<p><img src="img/J5500HPC.avif" alt="JSD SOLAR J5500HPC inverter" width="48%"> <img src="img/J5500HPC_02.png" alt="JSD SOLAR J5500HPC inverter" width="48%"></p>
 
 - **RS232-USB cable, or an RS232-to-WiFi/Ethernet bridge** (for example an ESP8266 running ESPHome `stream_server`, or a USR/Elfin module in transparent TCP mode).
 - **Connection Port**: the inverter's **RS232** DB9 port: pin 2 = inverter TX, pin 3 = inverter RX, pin 5 = GND.
