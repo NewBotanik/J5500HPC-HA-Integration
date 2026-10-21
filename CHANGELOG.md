@@ -6,6 +6,14 @@ description:
 
 [Deutsch](docs/de/CHANGELOG.md) | [Українська](docs/uk/CHANGELOG.md)
 
+## [3.4.2] - 2026-10-21
+### Fixed
+-   Hassfest validation: the device types in the setup form use lower-case option values (`jsd_solar`, `jk_balancer`, `pace_lv` …), because Home Assistant translation keys must match `[a-z0-9-_]`. The value is turned back into the upper-case type on submit, so stored entries (`JSD_SOLAR`, …) are unchanged.
+### Changed
+-   GitHub workflows use `actions/checkout@v5` (Node.js 24) instead of the deprecated Node.js 20 based `@v4`.
+
+---------------
+
 ## [3.4.1] - 2026-10-16
 ### Fixed
 -   [JSD SOLAR] Action `refresh` failed with "Unknown error" on current Home Assistant versions: `async_extract_entity_ids()` no longer takes `hass` (it reads it from the service call). Both signatures are now supported, so the action works from 2023.7 up.

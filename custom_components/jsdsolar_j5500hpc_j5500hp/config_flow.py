@@ -79,15 +79,17 @@ class GobelBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """First step: device type and connection; the next step asks only what that type needs."""
         if user_input is not None:
-            self.config_data = user_input
+            # The list uses lower-case values (translation keys must be [a-z0-9-_]); entries store BMS_TYPES
+            self.config_data = {**user_input, CONF_BMS_TYPE: user_input[CONF_BMS_TYPE].upper()}
             return await self.async_step_device()
 
         data_schema = vol.Schema(
             {
                 # Labelled list: JK_PB (JK BMS) and JK_BALANCER are easy to mix up by code alone
-                vol.Required(CONF_BMS_TYPE, default=BMS_TYPE_JSD_SOLAR): selector.SelectSelector(
+                vol.Required(CONF_BMS_TYPE, default=BMS_TYPE_JSD_SOLAR.lower()): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=BMS_TYPES, translation_key="bms_type", mode=selector.SelectSelectorMode.LIST
+                        options=[bms_type.lower() for bms_type in BMS_TYPES], translation_key="bms_type",
+                        mode=selector.SelectSelectorMode.LIST
                     )
                 ),
                 vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPES[0]): vol.In(CONNECTION_TYPES),

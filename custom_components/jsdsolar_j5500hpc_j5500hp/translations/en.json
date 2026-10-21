@@ -75,12 +75,12 @@
     },
     "bms_type": {
       "options": {
-        "PACE_LV": "PACE BMS (RS232 / RS485)",
-        "PACE_LV_WIFI": "PACE BMS via WiFi module",
-        "JK_PB": "JK BMS (55AA stream, 115200 baud)",
-        "TDT": "TDT BMS (RS232)",
-        "JSD_SOLAR": "JSD SOLAR inverter, RS232 2400 baud (J5500HPC/J5500HP, possibly others)",
-        "JK_BALANCER": "JK active balancer, RS485 9600 baud (JK-B2A24S-RS485, possibly others)"
+        "pace_lv": "PACE BMS (RS232 / RS485)",
+        "pace_lv_wifi": "PACE BMS via WiFi module",
+        "jk_pb": "JK BMS (55AA stream, 115200 baud)",
+        "tdt": "TDT BMS (RS232)",
+        "jsd_solar": "JSD SOLAR inverter, RS232 2400 baud (J5500HPC/J5500HP, possibly others)",
+        "jk_balancer": "JK active balancer, RS485 9600 baud (JK-B2A24S-RS485, possibly others)"
       }
     },
     "pace_current_scale": {

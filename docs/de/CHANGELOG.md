@@ -6,6 +6,14 @@ description:
 
 [English](../../CHANGELOG.md) | [Українська](../uk/CHANGELOG.md)
 
+## [3.4.2] - 2026-10-21
+### Behoben
+-   Hassfest-Prüfung: Die Gerätetypen im Einrichtungsformular verwenden Optionswerte in Kleinbuchstaben (`jsd_solar`, `jk_balancer`, `pace_lv` …), da Übersetzungsschlüssel in Home Assistant `[a-z0-9-_]` entsprechen müssen. Beim Absenden wird der Wert wieder in den Typ in Großbuchstaben umgewandelt, gespeicherte Einträge (`JSD_SOLAR`, …) bleiben also unverändert.
+### Geändert
+-   Die GitHub-Workflows verwenden `actions/checkout@v5` (Node.js 24) statt des veralteten, auf Node.js 20 basierenden `@v4`.
+
+---------------
+
 ## [3.4.1] - 2026-10-16
 ### Behoben
 -   [JSD SOLAR] Die Aktion `refresh` schlug in aktuellen Home-Assistant-Versionen mit „Unknown error“ fehl: `async_extract_entity_ids()` nimmt `hass` nicht mehr entgegen (es liest es aus dem Dienstaufruf). Beide Signaturen werden jetzt unterstützt, sodass die Aktion ab 2023.7 funktioniert.
