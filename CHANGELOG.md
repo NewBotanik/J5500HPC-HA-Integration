@@ -6,6 +6,14 @@ description:
 
 [Deutsch](docs/de/CHANGELOG.md) | [Українська](docs/uk/CHANGELOG.md)
 
+## [3.4.3] - 2026-10-21
+### Added
+-   `manifest.json` lists the integration categories `energy.backup_power` and `energy.solar_batteries`, so HACS and Home Assistant show it under Energy (removes the HACS warning "The integration manifest has no categories").
+### Changed
+-   `codeowners` in `manifest.json` is `@NewBotanik` (was `@fancyui`, the author of the upstream project).
+
+---------------
+
 ## [3.4.2] - 2026-10-21
 ### Fixed
 -   Hassfest validation: the device types in the setup form use lower-case option values (`jsd_solar`, `jk_balancer`, `pace_lv` …), because Home Assistant translation keys must match `[a-z0-9-_]`. The value is turned back into the upper-case type on submit, so stored entries (`JSD_SOLAR`, …) are unchanged.

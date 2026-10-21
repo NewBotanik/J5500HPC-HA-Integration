@@ -6,6 +6,14 @@ description:
 
 [English](../../CHANGELOG.md) | [Deutsch](../de/CHANGELOG.md)
 
+## [3.4.3] - 2026-10-21
+### Додано
+-   У `manifest.json` вказано категорії інтеграції `energy.backup_power` і `energy.solar_batteries`, тож HACS і Home Assistant показують її в розділі Energy (зникає попередження HACS «The integration manifest has no categories»).
+### Змінено
+-   `codeowners` у `manifest.json` тепер `@NewBotanik` (було `@fancyui`, автор основного проєкту).
+
+---------------
+
 ## [3.4.2] - 2026-10-21
 ### Виправлено
 -   Перевірка Hassfest: типи пристроїв у формі налаштування мають значення малими літерами (`jsd_solar`, `jk_balancer`, `pace_lv` …), бо ключі перекладів Home Assistant мають відповідати `[a-z0-9-_]`. Після вибору значення перетворюється назад на тип великими літерами, тож збережені записи (`JSD_SOLAR`, …) не змінюються.
