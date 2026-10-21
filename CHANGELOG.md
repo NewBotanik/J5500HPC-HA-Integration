@@ -6,6 +6,12 @@ description:
 
 [Deutsch](docs/de/CHANGELOG.md) | [Українська](docs/uk/CHANGELOG.md)
 
+## [3.4.4] - 2026-10-21
+### Removed
+-   `categories` in `manifest.json` again: the hassfest check used on GitHub does not accept the key for custom integrations yet (Home Assistant allowed it in its development branch on 2026-10-17). It will be added back once a released Home Assistant supports it. HACS only shows a warning without it.
+
+---------------
+
 ## [3.4.3] - 2026-10-21
 ### Added
 -   `manifest.json` lists the integration categories `energy.backup_power` and `energy.solar_batteries`, so HACS and Home Assistant show it under Energy (removes the HACS warning "The integration manifest has no categories").

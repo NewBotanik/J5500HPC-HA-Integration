@@ -1,10 +1,6 @@
 {
   "domain": "jsdsolar_j5500hpc_j5500hp",
   "name": "JSDSolar J5500HPC/J5500HP",
-  "categories": [
-    "energy.backup_power",
-    "energy.solar_batteries"
-  ],
   "codeowners": [
     "@NewBotanik"
   ],
@@ -15,5 +11,5 @@
   "requirements": [
     "pyserial>=3.5"
   ],
-  "version": "3.4.3"
+  "version": "3.4.4"
 }
